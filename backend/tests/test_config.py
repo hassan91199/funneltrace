@@ -1,0 +1,28 @@
+import pytest
+
+from funneltrace.config import Settings
+
+
+def test_settings_read_from_env(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost:5433/db")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("HUBSPOT_ACCESS_TOKEN", "hs-test")
+    s = Settings.from_env()
+    assert s.database_url == "postgresql://u:p@localhost:5433/db"
+    assert s.openai_api_key == "sk-test"
+    assert s.hubspot_access_token == "hs-test"
+
+
+def test_optional_keys_default_to_empty(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost:5433/db")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("HUBSPOT_ACCESS_TOKEN", raising=False)
+    s = Settings.from_env()
+    assert s.openai_api_key == ""
+    assert s.hubspot_access_token == ""
+
+
+def test_database_url_is_required(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
+        Settings.from_env()
