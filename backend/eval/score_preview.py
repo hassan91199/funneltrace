@@ -4,8 +4,10 @@ next to the locked expectation. Not the formal eval (that is FT-10); no database
     OPENAI_API_KEY=... python -m eval.score_preview
 """
 
+import os
+
 from eval.test_set import TEST_SET
-from funneltrace.config import Settings
+from funneltrace.config import load_env
 from funneltrace.intake import normalize_web_form, normalize_whatsapp
 from funneltrace.openai_llm import OpenAILLM
 from funneltrace.repository import InMemoryLeadRepository
@@ -13,8 +15,8 @@ from funneltrace.scoring import ScoringError, score_lead
 
 
 def main() -> None:
-    settings = Settings(database_url="unused", **_openai_settings())
-    llm = OpenAILLM(settings.openai_api_key, settings.openai_model)
+    load_env()
+    llm = OpenAILLM(os.environ["OPENAI_API_KEY"], os.environ.get("OPENAI_MODEL") or "gpt-4o-mini")
     repo = InMemoryLeadRepository()
     print(f"model: {llm.model}")
     for event in TEST_SET:
@@ -27,15 +29,6 @@ def main() -> None:
         except ScoringError as exc:
             got = f"ERROR {exc}"
         print(f"#{event['id']:<2} expected {event['expected_category']:<5} got {got}")
-
-
-def _openai_settings() -> dict:
-    import os
-
-    return {
-        "openai_api_key": os.environ["OPENAI_API_KEY"],
-        "openai_model": os.environ.get("OPENAI_MODEL") or "gpt-4o-mini",
-    }
 
 
 if __name__ == "__main__":

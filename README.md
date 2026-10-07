@@ -10,7 +10,7 @@ Status: scaffolding. Architecture, run instructions and eval numbers will be add
 docker compose up -d db                      # Postgres on localhost:5433
 cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 cp .env.example .env                         # fill in keys as needed
-DATABASE_URL=postgresql://funneltrace:funneltrace@localhost:5433/funneltrace .venv/bin/python -m funneltrace.db   # apply migrations
+.venv/bin/python -m funneltrace.db              # apply migrations (reads .env)
 .venv/bin/pytest                             # default suite, no network
 ```
 

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from funneltrace.config import Settings
+from funneltrace.config import Settings, load_env
 from funneltrace.intake import InboundLead, normalize_web_form, normalize_whatsapp
 from funneltrace.interfaces import LeadLLM
 from funneltrace.openai_llm import OpenAILLM
@@ -31,11 +31,13 @@ def create_app(repo: LeadRepository | None = None, llm: LeadLLM | None = None) -
     def get_repo() -> LeadRepository:
         # Built on first use so importing the app never needs a database.
         if holder["repo"] is None:
+            load_env()
             holder["repo"] = PgLeadRepository(Settings.from_env().database_url)
         return holder["repo"]
 
     def get_llm() -> LeadLLM:
         if holder["llm"] is None:
+            load_env()
             settings = Settings.from_env()
             holder["llm"] = OpenAILLM(settings.openai_api_key, settings.openai_model)
         return holder["llm"]

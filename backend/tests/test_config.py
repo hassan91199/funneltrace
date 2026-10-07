@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from funneltrace.config import Settings
@@ -33,3 +35,16 @@ def test_database_url_is_required(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     with pytest.raises(RuntimeError, match="DATABASE_URL"):
         Settings.from_env()
+
+
+def test_load_env_reads_a_dotenv_file_but_real_env_vars_win(tmp_path, monkeypatch):
+    from funneltrace.config import load_env
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=from-file\nOPENAI_MODEL=model-from-file\n")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_MODEL", "model-from-shell")
+    load_env(str(env_file))
+    assert os.environ["OPENAI_API_KEY"] == "from-file"
+    assert os.environ["OPENAI_MODEL"] == "model-from-shell"
+    monkeypatch.delenv("OPENAI_API_KEY")

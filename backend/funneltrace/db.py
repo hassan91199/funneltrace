@@ -25,6 +25,7 @@ def apply_migrations(database_url: str) -> None:
 
 
 if __name__ == "__main__":
-    from funneltrace.config import Settings
+    from funneltrace.config import Settings, load_env
 
+    load_env()
     apply_migrations(Settings.from_env().database_url)

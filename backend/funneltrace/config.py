@@ -1,6 +1,15 @@
 import os
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+
+
+def load_env(path: str | None = None) -> None:
+    """Read backend/.env (if present) into the environment; real env vars win.
+
+    Called by entrypoints, not by Settings.from_env, so tests never pick up a local .env."""
+    load_dotenv(path)
+
 
 @dataclass(frozen=True)
 class Settings:
