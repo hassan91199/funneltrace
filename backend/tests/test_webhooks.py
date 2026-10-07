@@ -19,7 +19,7 @@ HOT = {"category": "hot", "confidence": 0.9, "reasoning": "Urgent, has budget."}
 
 def make_client(llm=None):
     repo = InMemoryLeadRepository()
-    llm = llm or FakeLLM(json_responses=[HOT])
+    llm = llm or FakeLLM(score=HOT, draft={"subject": "s", "body": "b"})
     return TestClient(create_app(repo=repo, llm=llm)), repo
 
 
@@ -63,13 +63,13 @@ def test_webhook_scores_the_lead_and_returns_the_result():
 
 
 def test_a_returning_contact_is_rescored_with_the_whole_conversation():
-    llm = FakeLLM(json_responses=[HOT])
+    llm = FakeLLM(score=HOT, draft={"subject": "s", "body": "b"})
     client, repo = make_client(llm)
     first = client.post("/webhooks/web-form", json=FORM).json()
     second = client.post("/webhooks/whatsapp", json=WHATSAPP).json()
     assert second["lead_id"] == first["lead_id"]
     assert len(repo.scores_for(first["lead_id"])) == 2
-    user_prompt = llm.json_calls[1][1]
+    user_prompt = llm.json_calls[2][1]
     assert "Furnace died." in user_prompt and "call me today" in user_prompt
 
 

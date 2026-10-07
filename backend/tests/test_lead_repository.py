@@ -98,3 +98,26 @@ def test_messages_and_scoring_history_are_kept_per_lead(repo):
         ("warm", pytest.approx(0.6), "Early.", "m1"),
         ("hot", pytest.approx(0.9), "Deadline.", "m1"),
     ]
+
+
+def test_draft_lifecycle_and_events_persist(repo):
+    from funneltrace.scoring import ScoreResult
+
+    lead = repo.add_lead(
+        normalize_web_form({"name": "Dan", "email": "d@x.co", "phone": "", "message": "hi"})
+    )
+    scoring_id = repo.add_score(lead.lead_id, ScoreResult("hot", 0.9, "Urgent."), model="m")
+    first = repo.add_draft(lead.lead_id, scoring_id, "S1", "B1")
+    assert first.status == "pending" and first.lead_name == "Dan" and first.category == "hot"
+
+    second = repo.add_draft(lead.lead_id, scoring_id, "S2", "B2")
+    assert repo.get_draft(first.draft_id).status == "superseded"
+    assert [d.draft_id for d in repo.list_drafts("pending")] == [second.draft_id]
+
+    decided = repo.decide_draft(second.draft_id, "approved")
+    assert decided.status == "approved" and decided.decided_at is not None
+    assert repo.decide_draft(second.draft_id, "rejected") is None  # already decided
+
+    repo.log_event(lead.lead_id, "would_send", {"to": "d@x.co"})
+    (event,) = repo.events_for(lead.lead_id)
+    assert event.type == "would_send" and event.payload == {"to": "d@x.co"}
