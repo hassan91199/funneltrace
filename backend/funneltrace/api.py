@@ -33,7 +33,12 @@ def create_app(repo: LeadRepository | None = None) -> FastAPI:
 
     def store(inbound: InboundLead) -> dict:
         stored = get_repo().add_lead(inbound)
-        return {"lead_id": stored.lead_id, "message_id": stored.message_id}
+        return {
+            "lead_id": stored.lead_id,
+            "message_id": stored.message_id,
+            "is_new": stored.is_new,
+            "match_reason": stored.match_reason,
+        }
 
     @app.get("/health")
     def health() -> dict:

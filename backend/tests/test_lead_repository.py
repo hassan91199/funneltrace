@@ -47,3 +47,32 @@ def test_both_channels_land_in_the_same_tables_with_the_same_shape(repo):
     assert leads[1][3] is None and leads[1][4] == "14155550999"
     assert [m[0] for m in msgs] == ["web_form", "whatsapp"]
     assert msgs[1][2] == {"from": "14155550999", "profile_name": "Bob", "text": "yo"}
+
+
+def test_same_person_on_the_other_channel_merges_into_one_lead(repo):
+    import psycopg
+
+    first = repo.add_lead(
+        normalize_web_form(
+            {"name": "Priya Sharma", "email": "p@x.co", "phone": "+92 300 5550188", "message": "a"}
+        )
+    )
+    second = repo.add_lead(
+        normalize_whatsapp({"from": "923005550188", "profile_name": "Priya", "text": "b"})
+    )
+    other = repo.add_lead(
+        normalize_whatsapp({"from": "923005550999", "profile_name": "Priya", "text": "c"})
+    )
+    assert first.is_new and not second.is_new and other.is_new
+    assert second.lead_id == first.lead_id != other.lead_id
+    assert "phone" in second.match_reason
+
+    with psycopg.connect(TEST_DB) as conn:
+        assert conn.execute("SELECT count(*) FROM leads").fetchone()[0] == 2
+        rows = conn.execute(
+            "SELECT channel, match_reason FROM lead_messages WHERE lead_id = %s "
+            "ORDER BY received_at",
+            (first.lead_id,),
+        ).fetchall()
+    assert [r[0] for r in rows] == ["web_form", "whatsapp"]
+    assert rows[0][1] is None and "phone" in rows[1][1]
