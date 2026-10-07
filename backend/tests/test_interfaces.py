@@ -2,6 +2,8 @@ from funneltrace.interfaces import CrmSync, LeadLLM
 
 
 class FakeLLM:
+    model = "fake"
+
     def complete_json(self, system, user, schema):
         return {}
 

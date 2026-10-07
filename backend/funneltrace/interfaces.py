@@ -1,9 +1,15 @@
 from typing import Protocol, runtime_checkable
 
 
+class LLMRefusal(Exception):
+    """The model declined to answer (structured-output refusal)."""
+
+
 @runtime_checkable
 class LeadLLM(Protocol):
     """The only way the app talks to an LLM, so tests can swap in a fake."""
+
+    model: str
 
     def complete_json(self, system: str, user: str, schema: dict) -> dict: ...
 

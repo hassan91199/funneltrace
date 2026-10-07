@@ -7,6 +7,7 @@ from psycopg.types.json import Jsonb
 
 from funneltrace.dedup import Candidate, find_match, merged_name
 from funneltrace.intake import InboundLead
+from funneltrace.scoring import ScoreResult
 
 
 @dataclass(frozen=True)
@@ -17,8 +18,28 @@ class StoredLead:
     match_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class LeadContext:
+    name: str
+    messages: list[tuple[str, str]]  # (channel, body), oldest first
+
+
+@dataclass(frozen=True)
+class StoredScore:
+    category: str
+    confidence: float
+    reasoning: str
+    model: str
+
+
 class LeadRepository(Protocol):
     def add_lead(self, inbound: InboundLead) -> StoredLead: ...
+
+    def get_context(self, lead_id: str) -> LeadContext: ...
+
+    def add_score(self, lead_id: str, score: ScoreResult, model: str) -> None: ...
+
+    def scores_for(self, lead_id: str) -> list[StoredScore]: ...
 
 
 @dataclass
@@ -39,6 +60,8 @@ class InMemoryLeadRepository:
     def __init__(self) -> None:
         self.leads: list[InboundLead] = []
         self.records: list[LeadRecord] = []
+        self._messages: dict[str, list[tuple[str, str]]] = {}
+        self._scores: dict[str, list[StoredScore]] = {}
 
     def add_lead(self, inbound: InboundLead) -> StoredLead:
         self.leads.append(inbound)
@@ -60,14 +83,28 @@ class InMemoryLeadRepository:
                 inbound.normalized_phone,
             )
             self.records.append(record)
+            self._messages[record.lead_id] = [(inbound.channel, inbound.message)]
             return StoredLead(record.lead_id, message_id, is_new=True)
         record = next(r for r in self.records if r.lead_id == match.lead_id)
+        self._messages[record.lead_id].append((inbound.channel, inbound.message))
         record.name = merged_name(record.name, inbound.name)
         if not record.normalized_email:
             record.email, record.normalized_email = inbound.email, inbound.normalized_email
         if not record.normalized_phone:
             record.phone, record.normalized_phone = inbound.phone, inbound.normalized_phone
         return StoredLead(record.lead_id, message_id, is_new=False, match_reason=match.reason)
+
+    def get_context(self, lead_id: str) -> LeadContext:
+        record = next(r for r in self.records if r.lead_id == lead_id)
+        return LeadContext(record.name, list(self._messages[lead_id]))
+
+    def add_score(self, lead_id: str, score: ScoreResult, model: str) -> None:
+        self._scores.setdefault(lead_id, []).append(
+            StoredScore(score.category, score.confidence, score.reasoning, model)
+        )
+
+    def scores_for(self, lead_id: str) -> list[StoredScore]:
+        return list(self._scores.get(lead_id, []))
 
 
 class PgLeadRepository:
@@ -132,3 +169,30 @@ class PgLeadRepository:
             is_new=match is None,
             match_reason=match.reason if match else None,
         )
+
+    def get_context(self, lead_id: str) -> LeadContext:
+        with psycopg.connect(self._url) as conn:
+            name = conn.execute("SELECT name FROM leads WHERE id = %s", (lead_id,)).fetchone()[0]
+            rows = conn.execute(
+                "SELECT channel, body FROM lead_messages WHERE lead_id = %s "
+                "ORDER BY received_at, id",
+                (lead_id,),
+            ).fetchall()
+        return LeadContext(name, [(channel, body) for channel, body in rows])
+
+    def add_score(self, lead_id: str, score: ScoreResult, model: str) -> None:
+        with psycopg.connect(self._url) as conn:
+            conn.execute(
+                "INSERT INTO scoring_history (lead_id, category, confidence, reasoning, model) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (lead_id, score.category, score.confidence, score.reasoning, model),
+            )
+
+    def scores_for(self, lead_id: str) -> list[StoredScore]:
+        with psycopg.connect(self._url) as conn:
+            rows = conn.execute(
+                "SELECT category, confidence, reasoning, model FROM scoring_history "
+                "WHERE lead_id = %s ORDER BY created_at, id",
+                (lead_id,),
+            ).fetchall()
+        return [StoredScore(*row) for row in rows]

@@ -76,3 +76,25 @@ def test_same_person_on_the_other_channel_merges_into_one_lead(repo):
         ).fetchall()
     assert [r[0] for r in rows] == ["web_form", "whatsapp"]
     assert rows[0][1] is None and "phone" in rows[1][1]
+
+
+def test_messages_and_scoring_history_are_kept_per_lead(repo):
+    from funneltrace.scoring import ScoreResult
+
+    a = repo.add_lead(
+        normalize_web_form({"name": "Dan", "email": "d@x.co", "phone": "", "message": "first"})
+    )
+    repo.add_lead(
+        normalize_web_form({"name": "Dan", "email": "d@x.co", "phone": "", "message": "second"})
+    )
+    context = repo.get_context(a.lead_id)
+    assert context.name == "Dan"
+    assert context.messages == [("web_form", "first"), ("web_form", "second")]
+
+    repo.add_score(a.lead_id, ScoreResult("warm", 0.6, "Early."), model="m1")
+    repo.add_score(a.lead_id, ScoreResult("hot", 0.9, "Deadline."), model="m1")
+    history = repo.scores_for(a.lead_id)
+    assert [(s.category, s.confidence, s.reasoning, s.model) for s in history] == [
+        ("warm", pytest.approx(0.6), "Early.", "m1"),
+        ("hot", pytest.approx(0.9), "Deadline.", "m1"),
+    ]

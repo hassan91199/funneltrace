@@ -20,6 +20,13 @@ def test_optional_keys_default_to_empty(monkeypatch):
     s = Settings.from_env()
     assert s.openai_api_key == ""
     assert s.hubspot_access_token == ""
+    assert s.openai_model == "gpt-4o-mini"
+
+
+def test_openai_model_can_be_overridden(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost:5433/db")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+    assert Settings.from_env().openai_model == "gpt-test"
 
 
 def test_database_url_is_required(monkeypatch):

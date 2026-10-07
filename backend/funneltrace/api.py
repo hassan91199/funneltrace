@@ -3,7 +3,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from funneltrace.config import Settings
 from funneltrace.intake import InboundLead, normalize_web_form, normalize_whatsapp
+from funneltrace.interfaces import LeadLLM
+from funneltrace.openai_llm import OpenAILLM
 from funneltrace.repository import LeadRepository, PgLeadRepository
+from funneltrace.scoring import ScoringError, score_lead
 
 
 class WebFormPayload(BaseModel):
@@ -21,15 +24,39 @@ class WhatsAppPayload(BaseModel):
     text: str
 
 
-def create_app(repo: LeadRepository | None = None) -> FastAPI:
+def create_app(repo: LeadRepository | None = None, llm: LeadLLM | None = None) -> FastAPI:
     app = FastAPI(title="FunnelTrace")
-    holder: dict = {"repo": repo}
+    holder: dict = {"repo": repo, "llm": llm}
 
     def get_repo() -> LeadRepository:
         # Built on first use so importing the app never needs a database.
         if holder["repo"] is None:
             holder["repo"] = PgLeadRepository(Settings.from_env().database_url)
         return holder["repo"]
+
+    def get_llm() -> LeadLLM:
+        if holder["llm"] is None:
+            settings = Settings.from_env()
+            holder["llm"] = OpenAILLM(settings.openai_api_key, settings.openai_model)
+        return holder["llm"]
+
+    def score(lead_id: str) -> dict:
+        # Scoring failures must not lose the lead: it is already stored.
+        repo = get_repo()
+        try:
+            llm = get_llm()
+            context = repo.get_context(lead_id)
+            result = score_lead(llm, context.name, context.messages)
+        except ScoringError as exc:
+            return {"score": None, "score_error": str(exc)}
+        repo.add_score(lead_id, result, llm.model)
+        return {
+            "score": {
+                "category": result.category,
+                "confidence": result.confidence,
+                "reasoning": result.reasoning,
+            }
+        }
 
     def store(inbound: InboundLead) -> dict:
         stored = get_repo().add_lead(inbound)
@@ -38,6 +65,7 @@ def create_app(repo: LeadRepository | None = None) -> FastAPI:
             "message_id": stored.message_id,
             "is_new": stored.is_new,
             "match_reason": stored.match_reason,
+            **score(stored.lead_id),
         }
 
     @app.get("/health")
