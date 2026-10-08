@@ -3,7 +3,8 @@ import os
 import uuid
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from funneltrace.config import Settings, load_env
@@ -14,6 +15,7 @@ from funneltrace.interfaces import CrmError, CrmSync, LeadLLM
 from funneltrace.openai_llm import OpenAILLM
 from funneltrace.repository import Draft, LeadRepository, PgLeadRepository
 from funneltrace.scoring import ScoringError, score_lead
+from funneltrace.trace import stream_events
 
 logger = logging.getLogger("funneltrace.outbound")
 
@@ -88,8 +90,19 @@ def create_app(
             context = repo.get_context(lead_id)
             result = score_lead(llm, context.name, context.messages)
         except ScoringError as exc:
+            repo.log_event(lead_id, "score_failed", {"error": str(exc)})
             return {"score": None, "score_error": str(exc), "draft": None}
         scoring_id = repo.add_score(lead_id, result, llm.model)
+        repo.log_event(
+            lead_id,
+            "scored",
+            {
+                "category": result.category,
+                "confidence": result.confidence,
+                "reasoning": result.reasoning,
+                "model": llm.model,
+            },
+        )
         out: dict = {
             "score": {
                 "category": result.category,
@@ -100,12 +113,34 @@ def create_app(
         try:
             content = draft_followup(llm, context.name, result, context.messages)
         except DraftingError as exc:
+            repo.log_event(lead_id, "draft_failed", {"error": str(exc)})
             return {**out, "draft": None, "draft_error": str(exc)}
         draft = repo.add_draft(lead_id, scoring_id, content.subject, content.body)
+        repo.log_event(
+            lead_id,
+            "drafted",
+            {"draft_id": draft.draft_id, "subject": draft.subject, "category": result.category},
+        )
         return {**out, "draft": draft_json(draft)}
 
     def store(inbound: InboundLead) -> dict:
-        stored = get_repo().add_lead(inbound)
+        repo = get_repo()
+        stored = repo.add_lead(inbound)
+        repo.log_event(
+            stored.lead_id,
+            "lead_received",
+            {
+                "channel": inbound.channel,
+                "name": inbound.name,
+                "message_id": stored.message_id,
+                "message": inbound.message,
+            },
+        )
+        repo.log_event(
+            stored.lead_id,
+            "dedup_decision",
+            {"is_new": stored.is_new, "match_reason": stored.match_reason},
+        )
         return {
             "lead_id": stored.lead_id,
             "message_id": stored.message_id,
@@ -187,6 +222,7 @@ def create_app(
         if draft is None:
             raise HTTPException(status_code=409, detail="draft is already decided")
         out: dict = {"draft": draft_json(draft)}
+        repo.log_event(draft.lead_id, f"draft_{status}", {"draft_id": draft.draft_id})
         if status == "approved":
             # Nothing leaves the system: the "send" is a logged payload, only after approval.
             payload = would_send_payload(draft)
@@ -238,6 +274,27 @@ def create_app(
     @app.post("/drafts/{draft_id}/reject")
     def reject(draft_id: str) -> dict:
         return decide(draft_id, "rejected")
+
+    @app.get("/events")
+    def events(
+        lead_id: str | None = None,
+        after: int = 0,
+        follow: bool = True,
+        last_event_id: str | None = Header(default=None),
+    ) -> StreamingResponse:
+        if lead_id is not None:
+            try:
+                uuid.UUID(lead_id)
+            except ValueError:
+                raise HTTPException(status_code=404, detail="lead not found") from None
+        if last_event_id and last_event_id.isdigit():
+            after = max(after, int(last_event_id))
+        stream = stream_events(get_repo(), lead_id, after, follow)
+        return StreamingResponse(
+            stream,
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return app
 

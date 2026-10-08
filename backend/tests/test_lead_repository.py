@@ -135,3 +135,22 @@ def test_crm_syncs_persist_per_lead(repo):
     assert (failed.status, failed.error, failed.external_id) == ("failed", "HubSpot 401", None)
     assert (synced.status, synced.external_id, synced.action) == ("synced", "501", "create")
     assert synced.draft_id == draft.draft_id and synced.crm == "hubspot"
+
+
+def test_events_can_be_read_after_a_cursor_for_one_lead_or_all(repo):
+    a = repo.add_lead(
+        normalize_web_form({"name": "Dan", "email": "d@x.co", "phone": "", "message": "hi"})
+    )
+    b = repo.add_lead(
+        normalize_web_form({"name": "Eve", "email": "e@x.co", "phone": "", "message": "hi"})
+    )
+    repo.log_event(a.lead_id, "lead_received", {"n": 1})
+    repo.log_event(b.lead_id, "lead_received", {"n": 2})
+    repo.log_event(a.lead_id, "scored", {"n": 3})
+
+    everything = repo.events_after(0)
+    assert [e.payload["n"] for e in everything] == [1, 2, 3]
+    assert everything[0].lead_id == a.lead_id and everything[0].created_at is not None
+    assert [e.payload["n"] for e in repo.events_after(0, a.lead_id)] == [1, 3]
+    assert [e.payload["n"] for e in repo.events_after(everything[0].id)] == [2, 3]
+    assert repo.events_after(everything[-1].id) == []

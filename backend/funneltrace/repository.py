@@ -53,6 +53,9 @@ class Draft:
 class TraceEvent:
     type: str
     payload: dict
+    id: int = 0
+    lead_id: str | None = None
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -89,9 +92,13 @@ class LeadRepository(Protocol):
         """Move a pending draft to approved/rejected; None if it is not pending."""
         ...
 
-    def log_event(self, lead_id: str, type: str, payload: dict) -> None: ...
+    def log_event(self, lead_id: str | None, type: str, payload: dict) -> None: ...
 
     def events_for(self, lead_id: str) -> list[TraceEvent]: ...
+
+    def events_after(self, after_id: int, lead_id: str | None = None) -> list[TraceEvent]:
+        """Events with id > after_id, oldest first, for one lead or all leads."""
+        ...
 
     def add_crm_sync(
         self,
@@ -128,7 +135,7 @@ class InMemoryLeadRepository:
         self._messages: dict[str, list[tuple[str, str]]] = {}
         self._scores: dict[str, list[tuple[str, StoredScore]]] = {}
         self._drafts: list[tuple[Draft, str | None]] = []  # (draft, scoring_id)
-        self._events: dict[str, list[TraceEvent]] = {}
+        self._events: list[TraceEvent] = []
         self._crm_syncs: list[CrmSyncRecord] = []
 
     def add_lead(self, inbound: InboundLead) -> StoredLead:
@@ -220,11 +227,15 @@ class InMemoryLeadRepository:
             return None
         return self._replace(draft_id, status=status, decided_at=datetime.now(UTC))
 
-    def log_event(self, lead_id: str, type: str, payload: dict) -> None:
-        self._events.setdefault(lead_id, []).append(TraceEvent(type, payload))
+    def log_event(self, lead_id: str | None, type: str, payload: dict) -> None:
+        event = TraceEvent(type, payload, len(self._events) + 1, lead_id, datetime.now(UTC))
+        self._events.append(event)
 
     def events_for(self, lead_id: str) -> list[TraceEvent]:
-        return list(self._events.get(lead_id, []))
+        return [e for e in self._events if e.lead_id == lead_id]
+
+    def events_after(self, after_id: int, lead_id: str | None = None) -> list[TraceEvent]:
+        return [e for e in self._events if e.id > after_id and lead_id in (None, e.lead_id)]
 
     def add_crm_sync(
         self, lead_id, draft_id, crm, status, external_id=None, action=None, error=None
@@ -382,20 +393,34 @@ class PgLeadRepository:
             row = conn.execute(self._DRAFT_SELECT + "WHERE d.id = %s", (draft_id,)).fetchone()
         return self._draft(row)
 
-    def log_event(self, lead_id: str, type: str, payload: dict) -> None:
+    def log_event(self, lead_id: str | None, type: str, payload: dict) -> None:
         with psycopg.connect(self._url) as conn:
             conn.execute(
                 "INSERT INTO trace_events (lead_id, type, payload) VALUES (%s, %s, %s)",
                 (lead_id, type, Jsonb(payload)),
             )
 
+    _EVENT_SELECT = "SELECT id, lead_id, type, payload, created_at FROM trace_events "
+
+    @staticmethod
+    def _event(row) -> TraceEvent:
+        event_id, lead_id, type_, payload, created_at = row
+        return TraceEvent(type_, payload, event_id, str(lead_id) if lead_id else None, created_at)
+
     def events_for(self, lead_id: str) -> list[TraceEvent]:
         with psycopg.connect(self._url) as conn:
             rows = conn.execute(
-                "SELECT type, payload FROM trace_events WHERE lead_id = %s ORDER BY id",
-                (lead_id,),
+                self._EVENT_SELECT + "WHERE lead_id = %s ORDER BY id", (lead_id,)
             ).fetchall()
-        return [TraceEvent(*row) for row in rows]
+        return [self._event(r) for r in rows]
+
+    def events_after(self, after_id: int, lead_id: str | None = None) -> list[TraceEvent]:
+        query, params = self._EVENT_SELECT + "WHERE id > %s", [after_id]
+        if lead_id is not None:
+            query, params = query + " AND lead_id = %s", [after_id, lead_id]
+        with psycopg.connect(self._url) as conn:
+            rows = conn.execute(query + " ORDER BY id", params).fetchall()
+        return [self._event(r) for r in rows]
 
     def add_crm_sync(
         self, lead_id, draft_id, crm, status, external_id=None, action=None, error=None
