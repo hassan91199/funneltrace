@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from typing import Literal
 
@@ -6,9 +7,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from funneltrace.config import Settings, load_env
+from funneltrace.crm import LIFECYCLE_STAGE, HubSpotCrm
 from funneltrace.drafting import DraftingError, draft_followup
 from funneltrace.intake import InboundLead, normalize_web_form, normalize_whatsapp
-from funneltrace.interfaces import LeadLLM
+from funneltrace.interfaces import CrmError, CrmSync, LeadLLM
 from funneltrace.openai_llm import OpenAILLM
 from funneltrace.repository import Draft, LeadRepository, PgLeadRepository
 from funneltrace.scoring import ScoringError, score_lead
@@ -48,9 +50,13 @@ class WhatsAppPayload(BaseModel):
     text: str
 
 
-def create_app(repo: LeadRepository | None = None, llm: LeadLLM | None = None) -> FastAPI:
+def create_app(
+    repo: LeadRepository | None = None,
+    llm: LeadLLM | None = None,
+    crm: CrmSync | None = None,
+) -> FastAPI:
     app = FastAPI(title="FunnelTrace")
-    holder: dict = {"repo": repo, "llm": llm}
+    holder: dict = {"repo": repo, "llm": llm, "crm": crm}
 
     def get_repo() -> LeadRepository:
         # Built on first use so importing the app never needs a database.
@@ -65,6 +71,13 @@ def create_app(repo: LeadRepository | None = None, llm: LeadLLM | None = None) -
             settings = Settings.from_env()
             holder["llm"] = OpenAILLM(settings.openai_api_key, settings.openai_model)
         return holder["llm"]
+
+    def get_crm() -> CrmSync:
+        # A missing token surfaces as a recorded sync failure, not a startup error.
+        if holder["crm"] is None:
+            load_env()
+            holder["crm"] = HubSpotCrm(os.environ.get("HUBSPOT_ACCESS_TOKEN", ""))
+        return holder["crm"]
 
     def triage(lead_id: str) -> dict:
         """Score the lead, then draft a reply held for approval. A failure in either step
@@ -117,6 +130,51 @@ def create_app(repo: LeadRepository | None = None, llm: LeadLLM | None = None) -
             "body": draft.body,
         }
 
+    def sync_to_crm(draft: Draft) -> dict:
+        """Push the approved lead to the CRM. The approval stands even if this fails: the
+        outcome is recorded and traced so it is visible, never silently dropped."""
+        repo = get_repo()
+        lead_id = draft.lead_id
+        try:
+            crm = get_crm()
+        except CrmError as exc:
+            crm, crm_name, error = None, "hubspot", str(exc)
+        else:
+            crm_name, error = crm.name, None
+        if crm is not None:
+            context = repo.get_context(lead_id)
+            category = repo.scores_for(lead_id)[-1].category
+            contact = {
+                "name": context.name,
+                "email": context.email,
+                "phone": context.phone,
+                "lifecycle_stage": LIFECYCLE_STAGE[category],
+            }
+            previous = [r for r in repo.crm_syncs_for(lead_id) if r.status == "synced"]
+            if previous:
+                contact["external_id"] = previous[-1].external_id
+            try:
+                result = crm.upsert_contact(contact)
+            except CrmError as exc:
+                error = str(exc)
+        if error is not None:
+            repo.add_crm_sync(lead_id, draft.draft_id, crm_name, "failed", error=error)
+            repo.log_event(lead_id, "crm_failed", {"crm": crm_name, "error": error})
+            return {"crm": crm_name, "status": "failed", "error": error}
+        outcome = {
+            "crm": crm_name,
+            "status": "synced",
+            "action": result.action,
+            "external_id": result.external_id,
+        }
+        repo.add_crm_sync(
+            lead_id, draft.draft_id, crm_name, "synced", result.external_id, result.action
+        )
+        repo.log_event(
+            lead_id, "crm_synced", {**outcome, "lifecycle_stage": contact["lifecycle_stage"]}
+        )
+        return outcome
+
     def decide(draft_id: str, status: str) -> dict:
         repo = get_repo()
         try:
@@ -135,6 +193,7 @@ def create_app(repo: LeadRepository | None = None, llm: LeadLLM | None = None) -
             repo.log_event(draft.lead_id, "would_send", payload)
             logger.info("would send: %s", payload)
             out["would_send"] = payload
+            out["crm"] = sync_to_crm(draft)
         return out
 
     @app.get("/health")

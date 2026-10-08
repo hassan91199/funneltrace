@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from funneltrace.api import create_app
 from funneltrace.interfaces import LLMRefusal
 from funneltrace.repository import InMemoryLeadRepository
-from tests.fakes import FakeLLM
+from tests.fakes import FakeCrm, FakeLLM
 
 FORM = {
     "name": "Sarah Mitchell",
@@ -19,7 +19,11 @@ DRAFT = {"subject": "Re: furnace", "body": "We can visit this week."}
 def make(llm=None):
     repo = InMemoryLeadRepository()
     llm = llm or FakeLLM(score=SCORE, draft=DRAFT)
-    return TestClient(create_app(repo=repo, llm=llm)), repo
+    return TestClient(create_app(repo=repo, llm=llm, crm=FakeCrm())), repo
+
+
+def would_sends(repo, lead_id):
+    return [e for e in repo.events_for(lead_id) if e.type == "would_send"]
 
 
 def test_webhook_creates_a_pending_draft_and_sends_nothing():
@@ -31,7 +35,7 @@ def test_webhook_creates_a_pending_draft_and_sends_nothing():
     assert [d["id"] for d in inbox] == [body["draft"]["id"]]
     assert inbox[0]["lead_name"] == "Sarah Mitchell"
     assert inbox[0]["category"] == "hot" and inbox[0]["reasoning"] == "Urgent."
-    assert repo.events_for(body["lead_id"]) == []  # nothing "sent" yet
+    assert would_sends(repo, body["lead_id"]) == []  # nothing "sent" yet
 
 
 def test_approving_marks_it_approved_and_logs_a_would_send_payload():
@@ -40,7 +44,7 @@ def test_approving_marks_it_approved_and_logs_a_would_send_payload():
     resp = client.post(f"/drafts/{body['draft']['id']}/approve")
     assert resp.status_code == 200
     assert resp.json()["draft"]["status"] == "approved"
-    (event,) = repo.events_for(body["lead_id"])
+    (event,) = would_sends(repo, body["lead_id"])
     assert event.type == "would_send"
     assert event.payload == {
         "draft_id": body["draft"]["id"],
@@ -57,7 +61,7 @@ def test_reply_goes_out_on_the_channel_the_lead_last_used():
     client.post("/webhooks/web-form", json=FORM)
     body = client.post("/webhooks/whatsapp", json=WHATSAPP).json()
     client.post(f"/drafts/{body['draft']['id']}/approve")
-    (event,) = repo.events_for(body["lead_id"])
+    (event,) = would_sends(repo, body["lead_id"])
     assert event.payload["channel"] == "whatsapp" and event.payload["to"] == "14155550142"
 
 
@@ -66,7 +70,7 @@ def test_rejecting_marks_it_rejected_and_sends_nothing():
     body = client.post("/webhooks/web-form", json=FORM).json()
     resp = client.post(f"/drafts/{body['draft']['id']}/reject")
     assert resp.json()["draft"]["status"] == "rejected"
-    assert repo.events_for(body["lead_id"]) == []
+    assert would_sends(repo, body["lead_id"]) == []
     assert client.get("/drafts", params={"status": "pending"}).json() == []
 
 
@@ -77,7 +81,7 @@ def test_a_decided_draft_cannot_be_decided_again():
     client.post(f"/drafts/{draft_id}/approve")
     assert client.post(f"/drafts/{draft_id}/approve").status_code == 409
     assert client.post(f"/drafts/{draft_id}/reject").status_code == 409
-    assert len(repo.events_for(body["lead_id"])) == 1  # sent once, not twice
+    assert len(would_sends(repo, body["lead_id"])) == 1  # sent once, not twice
 
 
 def test_unknown_draft_is_a_404():

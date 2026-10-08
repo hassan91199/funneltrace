@@ -1,0 +1,129 @@
+import json
+
+import httpx
+import pytest
+
+from funneltrace.crm import LIFECYCLE_STAGE, HubSpotCrm
+from funneltrace.interfaces import CrmError
+
+CONTACT = {
+    "name": "Sarah Mitchell",
+    "email": "sarah@x.co",
+    "phone": "14155550142",
+    "lifecycle_stage": "salesqualifiedlead",
+}
+
+
+def make(responses):
+    """HubSpotCrm over a mock transport: `responses` is a queue of httpx.Response."""
+    seen: list[httpx.Request] = []
+
+    def handler(request):
+        seen.append(request)
+        return responses.pop(0)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    return HubSpotCrm("tok", client=client), seen
+
+
+def found(contact_id):
+    return httpx.Response(200, json={"total": 1, "results": [{"id": contact_id}]})
+
+
+NOT_FOUND = httpx.Response(200, json={"total": 0, "results": []})
+
+
+def test_lifecycle_mapping_matches_the_locked_eval_expectations():
+    assert LIFECYCLE_STAGE == {
+        "hot": "salesqualifiedlead",
+        "warm": "marketingqualifiedlead",
+        "cold": "lead",
+    }
+
+
+def test_creates_a_contact_when_none_matches():
+    crm, seen = make([NOT_FOUND, NOT_FOUND, httpx.Response(201, json={"id": "501"})])
+    result = crm.upsert_contact(CONTACT)
+    assert (result.external_id, result.action) == ("501", "create")
+    create = seen[-1]
+    assert create.method == "POST" and create.url.path == "/crm/v3/objects/contacts"
+    assert create.headers["authorization"] == "Bearer tok"
+    assert json.loads(create.content)["properties"] == {
+        "email": "sarah@x.co",
+        "phone": "+14155550142",
+        "firstname": "Sarah",
+        "lastname": "Mitchell",
+        "lifecyclestage": "salesqualifiedlead",
+    }
+
+
+def test_finds_an_existing_contact_by_email_and_updates_it():
+    crm, seen = make([found("77"), httpx.Response(200, json={"id": "77"})])
+    result = crm.upsert_contact(CONTACT)
+    assert (result.external_id, result.action) == ("77", "update")
+    search = json.loads(seen[0].content)
+    assert search["filterGroups"][0]["filters"][0] == {
+        "propertyName": "email",
+        "operator": "EQ",
+        "value": "sarah@x.co",
+    }
+    assert seen[1].method == "PATCH" and seen[1].url.path == "/crm/v3/objects/contacts/77"
+
+
+def test_falls_back_to_phone_when_email_finds_nothing():
+    crm, seen = make([NOT_FOUND, found("78"), httpx.Response(200, json={"id": "78"})])
+    assert crm.upsert_contact(CONTACT).external_id == "78"
+    phone_filter = json.loads(seen[1].content)["filterGroups"][0]["filters"][0]
+    assert phone_filter["propertyName"] == "phone" and phone_filter["value"] == "+14155550142"
+
+
+def test_a_known_external_id_skips_the_search():
+    crm, seen = make([httpx.Response(200, json={"id": "9"})])
+    result = crm.upsert_contact({**CONTACT, "external_id": "9"})
+    assert (result.external_id, result.action) == ("9", "update")
+    assert [r.method for r in seen] == ["PATCH"]
+
+
+def test_phone_only_contacts_skip_the_email_search_and_blank_fields_are_not_sent():
+    crm, seen = make([NOT_FOUND, httpx.Response(201, json={"id": "5"})])
+    crm.upsert_contact(
+        {
+            "name": "+14155550142",  # WhatsApp fallback name: not a real name
+            "email": None,
+            "phone": "14155550142",
+            "lifecycle_stage": "lead",
+        }
+    )
+    assert json.loads(seen[0].content)["filterGroups"][0]["filters"][0]["propertyName"] == "phone"
+    assert json.loads(seen[1].content)["properties"] == {
+        "phone": "+14155550142",
+        "lifecyclestage": "lead",
+    }
+
+
+def test_single_word_names_become_a_first_name_only():
+    crm, seen = make([NOT_FOUND, NOT_FOUND, httpx.Response(201, json={"id": "5"})])
+    crm.upsert_contact({**CONTACT, "name": "Priya"})
+    props = json.loads(seen[-1].content)["properties"]
+    assert props["firstname"] == "Priya" and "lastname" not in props
+
+
+@pytest.mark.parametrize("status", [401, 409, 429, 500])
+def test_http_errors_become_crm_errors_with_the_status(status):
+    crm, _ = make([httpx.Response(status, json={"message": "nope"})])
+    with pytest.raises(CrmError, match=str(status)):
+        crm.upsert_contact(CONTACT)
+
+
+def test_network_failures_become_crm_errors():
+    def boom(request):
+        raise httpx.ConnectError("no route")
+
+    crm = HubSpotCrm("tok", client=httpx.Client(transport=httpx.MockTransport(boom)))
+    with pytest.raises(CrmError, match="no route"):
+        crm.upsert_contact(CONTACT)
+
+
+def test_a_token_is_required():
+    with pytest.raises(CrmError, match="HUBSPOT_ACCESS_TOKEN"):
+        HubSpotCrm("")

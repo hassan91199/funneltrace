@@ -5,6 +5,7 @@ import pytest
 from funneltrace.db import apply_migrations
 from funneltrace.intake import normalize_web_form, normalize_whatsapp
 from funneltrace.repository import PgLeadRepository
+from funneltrace.scoring import ScoreResult
 
 TEST_DB = os.environ.get("FUNNELTRACE_TEST_DATABASE_URL")
 
@@ -79,8 +80,6 @@ def test_same_person_on_the_other_channel_merges_into_one_lead(repo):
 
 
 def test_messages_and_scoring_history_are_kept_per_lead(repo):
-    from funneltrace.scoring import ScoreResult
-
     a = repo.add_lead(
         normalize_web_form({"name": "Dan", "email": "d@x.co", "phone": "", "message": "first"})
     )
@@ -101,8 +100,6 @@ def test_messages_and_scoring_history_are_kept_per_lead(repo):
 
 
 def test_draft_lifecycle_and_events_persist(repo):
-    from funneltrace.scoring import ScoreResult
-
     lead = repo.add_lead(
         normalize_web_form({"name": "Dan", "email": "d@x.co", "phone": "", "message": "hi"})
     )
@@ -121,3 +118,20 @@ def test_draft_lifecycle_and_events_persist(repo):
     repo.log_event(lead.lead_id, "would_send", {"to": "d@x.co"})
     (event,) = repo.events_for(lead.lead_id)
     assert event.type == "would_send" and event.payload == {"to": "d@x.co"}
+
+
+def test_crm_syncs_persist_per_lead(repo):
+    lead = repo.add_lead(
+        normalize_web_form({"name": "Dan", "email": "d@x.co", "phone": "", "message": "hi"})
+    )
+    scoring_id = repo.add_score(lead.lead_id, ScoreResult("hot", 0.9, "Urgent."), model="m")
+    draft = repo.add_draft(lead.lead_id, scoring_id, "S", "B")
+
+    repo.add_crm_sync(lead.lead_id, draft.draft_id, "hubspot", "failed", error="HubSpot 401")
+    repo.add_crm_sync(
+        lead.lead_id, draft.draft_id, "hubspot", "synced", external_id="501", action="create"
+    )
+    failed, synced = repo.crm_syncs_for(lead.lead_id)
+    assert (failed.status, failed.error, failed.external_id) == ("failed", "HubSpot 401", None)
+    assert (synced.status, synced.external_id, synced.action) == ("synced", "501", "create")
+    assert synced.draft_id == draft.draft_id and synced.crm == "hubspot"

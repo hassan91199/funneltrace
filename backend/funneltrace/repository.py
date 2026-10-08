@@ -55,6 +55,17 @@ class TraceEvent:
     payload: dict
 
 
+@dataclass(frozen=True)
+class CrmSyncRecord:
+    lead_id: str
+    draft_id: str | None
+    crm: str
+    status: str  # synced | failed
+    external_id: str | None = None
+    action: str | None = None
+    error: str | None = None
+
+
 class LeadRepository(Protocol):
     def add_lead(self, inbound: InboundLead) -> StoredLead: ...
 
@@ -82,6 +93,19 @@ class LeadRepository(Protocol):
 
     def events_for(self, lead_id: str) -> list[TraceEvent]: ...
 
+    def add_crm_sync(
+        self,
+        lead_id: str,
+        draft_id: str | None,
+        crm: str,
+        status: str,
+        external_id: str | None = None,
+        action: str | None = None,
+        error: str | None = None,
+    ) -> None: ...
+
+    def crm_syncs_for(self, lead_id: str) -> list[CrmSyncRecord]: ...
+
 
 @dataclass
 class LeadRecord:
@@ -105,6 +129,7 @@ class InMemoryLeadRepository:
         self._scores: dict[str, list[tuple[str, StoredScore]]] = {}
         self._drafts: list[tuple[Draft, str | None]] = []  # (draft, scoring_id)
         self._events: dict[str, list[TraceEvent]] = {}
+        self._crm_syncs: list[CrmSyncRecord] = []
 
     def add_lead(self, inbound: InboundLead) -> StoredLead:
         self.leads.append(inbound)
@@ -200,6 +225,16 @@ class InMemoryLeadRepository:
 
     def events_for(self, lead_id: str) -> list[TraceEvent]:
         return list(self._events.get(lead_id, []))
+
+    def add_crm_sync(
+        self, lead_id, draft_id, crm, status, external_id=None, action=None, error=None
+    ) -> None:
+        self._crm_syncs.append(
+            CrmSyncRecord(lead_id, draft_id, crm, status, external_id, action, error)
+        )
+
+    def crm_syncs_for(self, lead_id: str) -> list[CrmSyncRecord]:
+        return [r for r in self._crm_syncs if r.lead_id == lead_id]
 
 
 class PgLeadRepository:
@@ -361,3 +396,25 @@ class PgLeadRepository:
                 (lead_id,),
             ).fetchall()
         return [TraceEvent(*row) for row in rows]
+
+    def add_crm_sync(
+        self, lead_id, draft_id, crm, status, external_id=None, action=None, error=None
+    ) -> None:
+        with psycopg.connect(self._url) as conn:
+            conn.execute(
+                "INSERT INTO crm_syncs "
+                "(lead_id, draft_id, crm, status, external_id, action, error) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (lead_id, draft_id, crm, status, external_id, action, error),
+            )
+
+    def crm_syncs_for(self, lead_id: str) -> list[CrmSyncRecord]:
+        with psycopg.connect(self._url) as conn:
+            rows = conn.execute(
+                "SELECT lead_id, draft_id, crm, status, external_id, action, error "
+                "FROM crm_syncs WHERE lead_id = %s ORDER BY created_at, id",
+                (lead_id,),
+            ).fetchall()
+        return [
+            CrmSyncRecord(*(str(v) if i < 2 and v else v for i, v in enumerate(r))) for r in rows
+        ]

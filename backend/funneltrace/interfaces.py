@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 
@@ -16,10 +17,24 @@ class LeadLLM(Protocol):
     def complete_text(self, system: str, user: str) -> str: ...
 
 
+class CrmError(Exception):
+    """The CRM call failed or the adapter is not configured."""
+
+
+@dataclass(frozen=True)
+class CrmResult:
+    external_id: str
+    action: str  # create | update
+
+
 @runtime_checkable
 class CrmSync(Protocol):
     """The one internal CRM interface; HubSpot is the single real adapter."""
 
-    def upsert_contact(self, contact: dict) -> str:
-        """Create or update the contact and return the CRM's id for it."""
+    name: str
+
+    def upsert_contact(self, contact: dict) -> CrmResult:
+        """Create or update the contact. `contact` has name, email, phone (digits),
+        lifecycle_stage and, when the lead was synced before, external_id.
+        Raises CrmError on failure."""
         ...

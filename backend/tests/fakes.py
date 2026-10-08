@@ -1,3 +1,6 @@
+from funneltrace.interfaces import CrmResult
+
+
 class FakeLLM:
     """Scripted LLM for the default suite: no network, records every call.
 
@@ -33,3 +36,23 @@ def _as_list(value):
 
 def _next(queue):
     return queue.pop(0) if len(queue) > 1 else queue[0]
+
+
+class FakeCrm:
+    """Records every upsert; "updates" when told which contact already exists.
+
+    Pass `error=` to make every call fail."""
+
+    name = "fake-crm"
+
+    def __init__(self, error=None):
+        self.calls: list[dict] = []
+        self._error = error
+
+    def upsert_contact(self, contact):
+        self.calls.append(contact)
+        if self._error:
+            raise self._error
+        if contact.get("external_id"):
+            return CrmResult(contact["external_id"], "update")
+        return CrmResult(f"crm-{len(self.calls)}", "create")
