@@ -9,6 +9,9 @@ LIFECYCLE_STAGE = {
     "cold": "lead",
 }
 
+# Only ever moves forward through these. HubSpot ignores a direct move to an earlier stage.
+STAGE_ORDER = ["lead", "marketingqualifiedlead", "salesqualifiedlead"]
+
 BASE_URL = "https://api.hubapi.com"
 CONTACTS = "/crm/v3/objects/contacts"
 
@@ -30,10 +33,23 @@ class HubSpotCrm:
         if not contact_id:
             contact_id = self._find(contact)
         if contact_id:
-            self._request("PATCH", f"{CONTACTS}/{contact_id}", {"properties": properties})
+            self._update(str(contact_id), properties)
             return CrmResult(str(contact_id), "update")
         created = self._request("POST", CONTACTS, {"properties": properties})
         return CrmResult(str(created["id"]), "create")
+
+    def _update(self, contact_id: str, properties: dict) -> None:
+        path = f"{CONTACTS}/{contact_id}"
+        current = self._request("GET", path, params={"properties": "lifecyclestage"})
+        current_stage = current["properties"].get("lifecyclestage")
+        new_stage = properties["lifecyclestage"]
+        if current_stage and current_stage not in STAGE_ORDER:
+            # Opportunity, customer, ...: further along than anything we assign. Leave it.
+            del properties["lifecyclestage"]
+        elif current_stage and STAGE_ORDER.index(current_stage) > STAGE_ORDER.index(new_stage):
+            # Clearing first is the only way HubSpot accepts a move back.
+            self._request("PATCH", path, {"properties": {"lifecyclestage": ""}})
+        self._request("PATCH", path, {"properties": properties})
 
     @staticmethod
     def _properties(contact: dict) -> dict:
@@ -58,11 +74,13 @@ class HubSpotCrm:
         if contact.get("email"):
             searches.append(("email", contact["email"]))
         if contact.get("phone"):
-            searches.append(("phone", "+" + contact["phone"]))
+            searches.append(("phone", contact["phone"]))
         for prop, value in searches:
+            # Phone is matched by token, not EQ: EQ only finds a new contact after indexing lag.
+            operator = "CONTAINS_TOKEN" if prop == "phone" else "EQ"
             body = {
                 "filterGroups": [
-                    {"filters": [{"propertyName": prop, "operator": "EQ", "value": value}]}
+                    {"filters": [{"propertyName": prop, "operator": operator, "value": value}]}
                 ],
                 "limit": 1,
             }
@@ -71,10 +89,12 @@ class HubSpotCrm:
                 return results[0]["id"]
         return None
 
-    def _request(self, method: str, path: str, body: dict) -> dict:
+    def _request(
+        self, method: str, path: str, body: dict | None = None, params: dict | None = None
+    ) -> dict:
         try:
             response = self._client.request(
-                method, BASE_URL + path, json=body, headers=self._headers
+                method, BASE_URL + path, json=body, params=params, headers=self._headers
             )
         except httpx.HTTPError as exc:
             raise CrmError(f"HubSpot request failed: {exc}") from exc

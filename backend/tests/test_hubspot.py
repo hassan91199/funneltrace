@@ -30,6 +30,11 @@ def found(contact_id):
     return httpx.Response(200, json={"total": 1, "results": [{"id": contact_id}]})
 
 
+def stage(current):
+    """The GET that reads a contact's current lifecycle stage before an update."""
+    return httpx.Response(200, json={"id": "x", "properties": {"lifecyclestage": current}})
+
+
 NOT_FOUND = httpx.Response(200, json={"total": 0, "results": []})
 
 
@@ -58,7 +63,7 @@ def test_creates_a_contact_when_none_matches():
 
 
 def test_finds_an_existing_contact_by_email_and_updates_it():
-    crm, seen = make([found("77"), httpx.Response(200, json={"id": "77"})])
+    crm, seen = make([found("77"), stage("lead"), httpx.Response(200, json={"id": "77"})])
     result = crm.upsert_contact(CONTACT)
     assert (result.external_id, result.action) == ("77", "update")
     search = json.loads(seen[0].content)
@@ -67,21 +72,28 @@ def test_finds_an_existing_contact_by_email_and_updates_it():
         "operator": "EQ",
         "value": "sarah@x.co",
     }
-    assert seen[1].method == "PATCH" and seen[1].url.path == "/crm/v3/objects/contacts/77"
+    assert seen[-1].method == "PATCH" and seen[-1].url.path == "/crm/v3/objects/contacts/77"
 
 
 def test_falls_back_to_phone_when_email_finds_nothing():
-    crm, seen = make([NOT_FOUND, found("78"), httpx.Response(200, json={"id": "78"})])
+    crm, seen = make(
+        [NOT_FOUND, found("78"), stage("lead"), httpx.Response(200, json={"id": "78"})]
+    )
     assert crm.upsert_contact(CONTACT).external_id == "78"
     phone_filter = json.loads(seen[1].content)["filterGroups"][0]["filters"][0]
-    assert phone_filter["propertyName"] == "phone" and phone_filter["value"] == "+14155550142"
+    # CONTAINS_TOKEN on the digits: found immediately, while EQ lags behind HubSpot's indexing.
+    assert phone_filter == {
+        "propertyName": "phone",
+        "operator": "CONTAINS_TOKEN",
+        "value": "14155550142",
+    }
 
 
 def test_a_known_external_id_skips_the_search():
-    crm, seen = make([httpx.Response(200, json={"id": "9"})])
+    crm, seen = make([stage("lead"), httpx.Response(200, json={"id": "9"})])
     result = crm.upsert_contact({**CONTACT, "external_id": "9"})
     assert (result.external_id, result.action) == ("9", "update")
-    assert [r.method for r in seen] == ["PATCH"]
+    assert [r.method for r in seen] == ["GET", "PATCH"]
 
 
 def test_phone_only_contacts_skip_the_email_search_and_blank_fields_are_not_sent():
@@ -106,6 +118,34 @@ def test_single_word_names_become_a_first_name_only():
     crm.upsert_contact({**CONTACT, "name": "Priya"})
     props = json.loads(seen[-1].content)["properties"]
     assert props["firstname"] == "Priya" and "lastname" not in props
+
+
+def lifecycle_patches(seen):
+    return [
+        json.loads(r.content)["properties"].get("lifecyclestage")
+        for r in seen
+        if r.method == "PATCH"
+    ]
+
+
+def test_moving_to_an_earlier_stage_clears_it_first_because_hubspot_ignores_a_direct_downgrade():
+    crm, seen = make(
+        [stage("salesqualifiedlead"), httpx.Response(200, json={}), httpx.Response(200, json={})]
+    )
+    crm.upsert_contact({**CONTACT, "external_id": "9", "lifecycle_stage": "marketingqualifiedlead"})
+    assert lifecycle_patches(seen) == ["", "marketingqualifiedlead"]
+
+
+def test_moving_forward_or_staying_put_is_a_single_update():
+    crm, seen = make([stage("lead"), httpx.Response(200, json={})])
+    crm.upsert_contact({**CONTACT, "external_id": "9"})
+    assert lifecycle_patches(seen) == ["salesqualifiedlead"]
+
+
+def test_a_stage_outside_our_three_is_never_overwritten():
+    crm, seen = make([stage("customer"), httpx.Response(200, json={})])
+    crm.upsert_contact({**CONTACT, "external_id": "9", "lifecycle_stage": "lead"})
+    assert lifecycle_patches(seen) == [None]  # the PATCH carries no lifecyclestage at all
 
 
 @pytest.mark.parametrize("status", [401, 409, 429, 500])
