@@ -38,6 +38,19 @@ class HubSpotCrm:
         created = self._request("POST", CONTACTS, {"properties": properties})
         return CrmResult(str(created["id"]), "create")
 
+    def find_contact(self, contact: dict) -> str | None:
+        return self._find(contact)
+
+    def get_contact(self, contact_id: str) -> dict:
+        """The contact's lifecycle stage, email and phone as HubSpot currently holds them."""
+        path = f"{CONTACTS}/{contact_id}"
+        return self._request("GET", path, params={"properties": "lifecyclestage,email,phone"})[
+            "properties"
+        ]
+
+    def delete_contact(self, contact_id: str) -> None:
+        self._request("DELETE", f"{CONTACTS}/{contact_id}")
+
     def _update(self, contact_id: str, properties: dict) -> None:
         path = f"{CONTACTS}/{contact_id}"
         current = self._request("GET", path, params={"properties": "lifecyclestage"})
@@ -100,4 +113,4 @@ class HubSpotCrm:
             raise CrmError(f"HubSpot request failed: {exc}") from exc
         if response.status_code >= 400:
             raise CrmError(f"HubSpot {response.status_code}: {response.text[:300]}")
-        return response.json()
+        return response.json() if response.content else {}

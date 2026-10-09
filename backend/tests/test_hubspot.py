@@ -167,3 +167,22 @@ def test_network_failures_become_crm_errors():
 def test_a_token_is_required():
     with pytest.raises(CrmError, match="HUBSPOT_ACCESS_TOKEN"):
         HubSpotCrm("")
+
+
+def test_eval_helpers_read_find_and_delete_contacts():
+    crm, seen = make(
+        [
+            httpx.Response(200, json={"id": "7", "properties": {"lifecyclestage": "lead"}}),
+            found("7"),
+            httpx.Response(204),
+        ]
+    )
+    assert crm.get_contact("7") == {"lifecyclestage": "lead"}
+    assert crm.find_contact(CONTACT) == "7"
+    crm.delete_contact("7")
+    assert [(r.method, r.url.path) for r in seen] == [
+        ("GET", "/crm/v3/objects/contacts/7"),
+        ("POST", "/crm/v3/objects/contacts/search"),
+        ("DELETE", "/crm/v3/objects/contacts/7"),
+    ]
+    assert seen[0].url.params["properties"] == "lifecyclestage,email,phone"
