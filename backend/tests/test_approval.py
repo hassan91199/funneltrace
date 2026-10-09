@@ -123,3 +123,18 @@ def test_no_draft_when_scoring_failed():
 def test_status_filter_rejects_unknown_values():
     client, _ = make()
     assert client.get("/drafts", params={"status": "bogus"}).status_code == 422
+
+
+def test_inbox_items_carry_the_score_confidence():
+    client, _ = make()
+    client.post("/webhooks/web-form", json=FORM)
+    (item,) = client.get("/drafts", params={"status": "pending"}).json()
+    assert item["confidence"] == 0.9
+
+
+def test_the_browser_ui_origin_is_allowed_by_cors():
+    client, _ = make()
+    resp = client.get("/drafts", headers={"Origin": "http://localhost:3000"})
+    assert resp.headers["access-control-allow-origin"] == "http://localhost:3000"
+    other = client.get("/drafts", headers={"Origin": "http://evil.example"})
+    assert "access-control-allow-origin" not in other.headers

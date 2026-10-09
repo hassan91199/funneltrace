@@ -4,6 +4,7 @@ import uuid
 from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,6 +30,7 @@ def draft_json(draft: Draft) -> dict:
         "lead_name": draft.lead_name,
         "category": draft.category,
         "reasoning": draft.reasoning,
+        "confidence": draft.confidence,
         "subject": draft.subject,
         "body": draft.body,
         "status": draft.status,
@@ -58,6 +60,11 @@ def create_app(
     crm: CrmSync | None = None,
 ) -> FastAPI:
     app = FastAPI(title="FunnelTrace")
+    load_env()
+    origins = os.environ.get("FRONTEND_ORIGINS", "http://localhost:3000").split(",")
+    app.add_middleware(
+        CORSMiddleware, allow_origins=[o.strip() for o in origins], allow_methods=["*"]
+    )
     holder: dict = {"repo": repo, "llm": llm, "crm": crm}
 
     def get_repo() -> LeadRepository:

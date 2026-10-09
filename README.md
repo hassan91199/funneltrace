@@ -14,4 +14,13 @@ cp .env.example .env                         # fill in keys as needed
 .venv/bin/pytest                             # default suite, no network
 ```
 
+## Frontend quick start
+
+```bash
+cd backend && .venv/bin/uvicorn funneltrace.api:app --port 8000   # API
+cd frontend && npm install && npm run dev                           # UI on http://localhost:3000
+```
+
+Open the UI, fire a demo lead, watch the trace, then approve the draft in the inbox.
+
 DB-backed tests are opt-in: set `FUNNELTRACE_TEST_DATABASE_URL` to a scratch database (it drops and recreates the `public` schema).

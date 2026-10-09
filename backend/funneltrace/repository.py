@@ -47,6 +47,7 @@ class Draft:
     status: str  # pending | approved | rejected | superseded
     created_at: datetime
     decided_at: datetime | None = None
+    confidence: float | None = None
 
 
 @dataclass(frozen=True)
@@ -206,6 +207,7 @@ class InMemoryLeadRepository:
             lead_name=next(r.name for r in self.records if r.lead_id == lead_id),
             category=score.category if score else None,
             reasoning=score.reasoning if score else None,
+            confidence=score.confidence if score else None,
             subject=subject,
             body=body,
             status="pending",
@@ -344,7 +346,7 @@ class PgLeadRepository:
 
     _DRAFT_SELECT = (
         "SELECT d.id, d.lead_id, l.name, s.category, s.reasoning, d.subject, d.body, "
-        "d.status, d.created_at, d.decided_at "
+        "d.status, d.created_at, d.decided_at, s.confidence "
         "FROM drafts d JOIN leads l ON l.id = d.lead_id "
         "LEFT JOIN scoring_history s ON s.id = d.scoring_id "
     )
