@@ -138,3 +138,16 @@ def test_the_browser_ui_origin_is_allowed_by_cors():
     assert resp.headers["access-control-allow-origin"] == "http://localhost:3000"
     other = client.get("/drafts", headers={"Origin": "http://evil.example"})
     assert "access-control-allow-origin" not in other.headers
+
+
+def test_a_separate_drafting_model_writes_the_draft_and_is_traced():
+    repo = InMemoryLeadRepository()
+    scorer = FakeLLM(score=SCORE, draft=DRAFT)
+    writer = FakeLLM(draft={"subject": "From the writer", "body": "Written by the other model."})
+    writer.model = "fake-writer"
+    client = TestClient(create_app(repo=repo, llm=scorer, crm=FakeCrm(), draft_llm=writer))
+    body = client.post("/webhooks/web-form", json=FORM).json()
+    assert body["draft"]["subject"] == "From the writer"
+    assert len(scorer.json_calls) == 1 and len(writer.json_calls) == 1
+    drafted = [e for e in repo.events_for(body["lead_id"]) if e.type == "drafted"]
+    assert drafted[0].payload["model"] == "fake-writer"

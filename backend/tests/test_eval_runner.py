@@ -150,7 +150,9 @@ def test_latency_is_measured_per_event_and_summarised():
 
 def test_markdown_reports_only_what_was_measured():
     report = run()
-    text = to_markdown(report, models={"scorer": "fake-model", "judge": "stub-judge"})
+    text = to_markdown(
+        report, models={"scorer": "fake-model", "drafter": "fake-model", "judge": "stub-judge"}
+    )
     assert "fake-model" in text and "stub-judge" in text
     assert "10/10" in text
     assert text.count("| ") > 10  # a per-event table
@@ -211,3 +213,32 @@ def test_the_grader_is_told_quotes_are_contiguous_and_absence_needs_none():
     lowered = JUDGE_SYSTEM.lower()
     assert "single" in lowered and "contiguous" in lowered
     assert "must not" in lowered or "does not" in lowered
+
+
+def test_the_eval_can_use_a_separate_drafting_model():
+    writer = FakeLLM(draft=list(DRAFTS))
+    writer.model = "fake-writer"
+    scorer = FakeLLM(score=list(PERFECT_SCORES), draft=[{"subject": "wrong", "body": "wrong"}])
+    report = run_eval(
+        llm=scorer,
+        judge=StubJudge(),
+        crm=FakeCrm(),
+        repo=InMemoryLeadRepository(),
+        draft_llm=writer,
+    )
+    assert report.events[0].draft_subject == "Re 1"
+    assert report.summary()["passed"]["draft"] == 10
+
+
+def test_several_runs_are_summarised_with_their_spread():
+    from eval.runner import aggregate, aggregate_markdown
+
+    perfect = run()
+    worse = run(judge=StubJudge(unmet=[TEST_SET[0]["draft_must_address"][0]]))  # event 1 fails
+    agg = aggregate([perfect, worse, perfect])
+    assert agg["runs"] == 3
+    assert agg["draft"] == {"per_run": [10, 9, 10], "mean": 29 / 3, "min": 9, "max": 10}
+    assert agg["all_passed"]["per_run"] == [10, 9, 10]
+    assert agg["event_pass_counts"][1] == 2 and agg["event_pass_counts"][2] == 3
+    text = aggregate_markdown(agg, models={"scorer": "s", "drafter": "d", "judge": "j"})
+    assert "9–10" in text and "`d`" in text

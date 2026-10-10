@@ -58,6 +58,7 @@ def create_app(
     repo: LeadRepository | None = None,
     llm: LeadLLM | None = None,
     crm: CrmSync | None = None,
+    draft_llm: LeadLLM | None = None,
 ) -> FastAPI:
     app = FastAPI(title="FunnelTrace")
     load_env()
@@ -65,7 +66,8 @@ def create_app(
     app.add_middleware(
         CORSMiddleware, allow_origins=[o.strip() for o in origins], allow_methods=["*"]
     )
-    holder: dict = {"repo": repo, "llm": llm, "crm": crm}
+    # An injected model (the tests, the eval) writes drafts too unless told otherwise.
+    holder: dict = {"repo": repo, "llm": llm, "crm": crm, "draft_llm": draft_llm or llm}
 
     def get_repo() -> LeadRepository:
         # Built on first use so importing the app never needs a database.
@@ -80,6 +82,19 @@ def create_app(
             settings = Settings.from_env()
             holder["llm"] = OpenAILLM(settings.openai_api_key, settings.openai_model)
         return holder["llm"]
+
+    def get_draft_llm() -> LeadLLM:
+        """The model that writes replies: its own one if configured, else the scoring model."""
+        if holder["draft_llm"] is None:
+            load_env()
+            settings = Settings.from_env()
+            if settings.openai_draft_model == settings.openai_model:
+                holder["draft_llm"] = get_llm()
+            else:
+                holder["draft_llm"] = OpenAILLM(
+                    settings.openai_api_key, settings.openai_draft_model
+                )
+        return holder["draft_llm"]
 
     def get_crm() -> CrmSync:
         # A missing token surfaces as a recorded sync failure, not a startup error.
@@ -118,7 +133,8 @@ def create_app(
             }
         }
         try:
-            content = draft_followup(llm, context.name, result, context.messages)
+            writer = get_draft_llm()
+            content = draft_followup(writer, context.name, result, context.messages)
         except DraftingError as exc:
             repo.log_event(lead_id, "draft_failed", {"error": str(exc)})
             return {**out, "draft": None, "draft_error": str(exc)}
@@ -126,7 +142,12 @@ def create_app(
         repo.log_event(
             lead_id,
             "drafted",
-            {"draft_id": draft.draft_id, "subject": draft.subject, "category": result.category},
+            {
+                "draft_id": draft.draft_id,
+                "subject": draft.subject,
+                "category": result.category,
+                "model": writer.model,
+            },
         )
         return {**out, "draft": draft_json(draft)}
 

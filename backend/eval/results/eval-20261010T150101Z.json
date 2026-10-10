@@ -1,0 +1,590 @@
+{
+  "started_at": "2026-10-10T15:01:01.494922+00:00",
+  "models": {
+    "scorer": "gpt-4o-mini",
+    "drafter": "gpt-4o-mini",
+    "judge": "gpt-4.1"
+  },
+  "summary": {
+    "events": 10,
+    "passed": {
+      "category": 10,
+      "dedup": 10,
+      "draft": 6,
+      "crm": 10
+    },
+    "all_passed": 6,
+    "distinct_leads": 7,
+    "latency_s": {
+      "webhook": {
+        "mean": 2.981262369500473,
+        "p50": 2.900667941546999,
+        "max": 3.71511935594026
+      },
+      "approve": {
+        "mean": 2.1910526628023943,
+        "p50": 2.196407964511309,
+        "max": 2.7203273969935253
+      },
+      "total": {
+        "mean": 5.172315032302867,
+        "p50": 5.040509618993383,
+        "max": 6.342966760974377
+      }
+    }
+  },
+  "events": [
+    {
+      "id": 1,
+      "person": "sarah-mitchell",
+      "channel": "web_form",
+      "expected_category": "hot",
+      "expected_new_lead": true,
+      "expected_crm": {
+        "action": "create",
+        "lifecycle_stage": "salesqualifiedlead"
+      },
+      "lead_id": "1676eefc-98b1-446d-abf5-1a3f727dc922",
+      "got_category": "hot",
+      "confidence": 0.95,
+      "reasoning": "The lead has an urgent need for a furnace replacement due to a broken unit and a clear budget for the service.",
+      "is_new": true,
+      "match_reason": null,
+      "draft_subject": "Furnace Replacement Quote",
+      "draft_body": "Hi Sarah,\n\nThanks for reaching out! We understand how urgent this situation is, especially with the freezing temperatures. We can definitely help you get a new furnace installed.\n\nLet\u2019s schedule a call or a visit this week to discuss your options and provide you with a quote that fits within your budget. Just let us know what day works best for you!\n\nStay warm, and we look forward to helping you.\n\nBest,\nThe Team",
+      "judge": [
+        {
+          "point": "acknowledges the furnace outage and the urgency",
+          "met": true,
+          "evidence": "We understand how urgent this situation is, especially with the freezing temperatures.",
+          "why": "This statement directly acknowledges both the furnace issue and the urgent nature due to the cold."
+        },
+        {
+          "point": "offers a fast next step (call or visit this week)",
+          "met": true,
+          "evidence": "Let\u2019s schedule a call or a visit this week to discuss your options and provide you with a quote that fits within your budget.",
+          "why": "The draft clearly offers to schedule a call or visit within the stated timeframe (this week), addressing the need for a fast next step."
+        },
+        {
+          "point": "does not quote a price",
+          "met": true,
+          "evidence": "",
+          "why": "The draft does not mention any specific price or quote any numbers."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "create",
+      "crm_stage": "salesqualifiedlead",
+      "crm_external_id": "567392732895",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:09.248Z",
+        "email": "sarah.mitchell@gmail.com",
+        "hs_object_id": "567392732895",
+        "lastmodifieddate": "2026-10-10T15:01:09.248Z",
+        "lifecyclestage": "salesqualifiedlead",
+        "phone": "+14155550142"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": true,
+      "crm_ok": true,
+      "webhook_s": 3.622639363980852,
+      "approve_s": 2.7203273969935253
+    },
+    {
+      "id": 2,
+      "person": "sarah-mitchell",
+      "channel": "whatsapp",
+      "expected_category": "hot",
+      "expected_new_lead": false,
+      "expected_crm": {
+        "action": "update",
+        "lifecycle_stage": "salesqualifiedlead"
+      },
+      "lead_id": "1676eefc-98b1-446d-abf5-1a3f727dc922",
+      "got_category": "hot",
+      "confidence": 0.95,
+      "reasoning": "The urgency of a broken furnace in freezing conditions combined with an approved budget and a request for same-day contact indicates a strong intent to buy immediately.",
+      "is_new": false,
+      "match_reason": "normalized phone match; name 'Sarah M' ~ 'Sarah Mitchell'",
+      "draft_subject": "Urgent Furnace Replacement",
+      "draft_body": "Hi Sarah,\n\nThanks for following up! We completely understand the urgency with your furnace situation, and we want to help you as quickly as possible. \n\nWe can give you a call today to discuss your replacement needs and provide you with a quote. Could you please confirm the best time for us to reach you? \n\nStay warm, and we\u2019ll get this sorted out soon!",
+      "judge": [
+        {
+          "point": "references her earlier form request (knows she already reached out)",
+          "met": true,
+          "evidence": "Thanks for following up!",
+          "why": "Saying 'Thanks for following up!' indicates the writer knows this is not the first message and acknowledges the earlier form request."
+        },
+        {
+          "point": "commits to a same-day call back",
+          "met": true,
+          "evidence": "We can give you a call today to discuss your replacement needs and provide you with a quote.",
+          "why": "The draft explicitly states they can call 'today,' which meets the requirement to commit to a same-day call back."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "update",
+      "crm_stage": "salesqualifiedlead",
+      "crm_external_id": "567392732895",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:09.248Z",
+        "email": "sarah.mitchell@gmail.com",
+        "hs_object_id": "567392732895",
+        "lastmodifieddate": "2026-10-10T15:01:13.895Z",
+        "lifecyclestage": "salesqualifiedlead",
+        "phone": "+14155550142"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": true,
+      "crm_ok": true,
+      "webhook_s": 3.71511935594026,
+      "approve_s": 2.1789693150203675
+    },
+    {
+      "id": 3,
+      "person": "daniel-okafor",
+      "channel": "web_form",
+      "expected_category": "warm",
+      "expected_new_lead": true,
+      "expected_crm": {
+        "action": "create",
+        "lifecycle_stage": "marketingqualifiedlead"
+      },
+      "lead_id": "3befd2df-93e0-4193-93a1-810ae4e7c2b9",
+      "got_category": "warm",
+      "confidence": 0.8,
+      "reasoning": "Daniel has a genuine interest in a kitchen remodel but indicates a longer timeline of about three months.",
+      "is_new": true,
+      "match_reason": null,
+      "draft_subject": "Excited to Help with Your Kitchen Remodel!",
+      "draft_body": "Hi Daniel,\n\nThanks for reaching out about your kitchen remodel! A three-month timeline is a great starting point for planning. \n\nWe\u2019ll be happy to share more about our process and provide you a ballpark estimate. Could you share any specific ideas or features you're considering for your kitchen? This will help us give you the best guidance.\n\nLooking forward to chatting more!",
+      "judge": [
+        {
+          "point": "answers the process question at a high level",
+          "met": false,
+          "evidence": "",
+          "why": "The draft says 'We\u2019ll be happy to share more about our process' but does not actually describe or outline the process at all."
+        },
+        {
+          "point": "offers a consultation without pushing urgency",
+          "met": true,
+          "evidence": "Could you share any specific ideas or features you're considering for your kitchen?",
+          "why": "The draft invites more information in a conversational way and does not push urgency or hard-sell a consultation; it gently opens the door for further discussion."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "create",
+      "crm_stage": "marketingqualifiedlead",
+      "crm_external_id": "567390432997",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:25.289Z",
+        "email": "d.okafor@fastmail.com",
+        "hs_object_id": "567390432997",
+        "lastmodifieddate": "2026-10-10T15:01:25.289Z",
+        "lifecyclestage": "marketingqualifiedlead",
+        "phone": "+16505550177"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": false,
+      "crm_ok": true,
+      "webhook_s": 3.1943658100208268,
+      "approve_s": 2.5748743569711223
+    },
+    {
+      "id": 4,
+      "person": "priya-sharma",
+      "channel": "whatsapp",
+      "expected_category": "warm",
+      "expected_new_lead": true,
+      "expected_crm": {
+        "action": "create",
+        "lifecycle_stage": "marketingqualifiedlead"
+      },
+      "lead_id": "e6dba1db-5099-40c2-b9b2-4a4ee862292b",
+      "got_category": "warm",
+      "confidence": 0.8,
+      "reasoning": "Priya is inquiring about pricing but does not indicate urgency to schedule the tune-up.",
+      "is_new": true,
+      "match_reason": null,
+      "draft_subject": "AC Tune-Up Pricing Inquiry",
+      "draft_body": "Hi Priya,\n\nThanks for reaching out! We\u2019d love to help with your AC tune-up. The cost can vary depending on a few factors, and we\u2019d like to understand your system better to provide an accurate quote.  \n\nCould you share any details about your AC unit, like the brand and model? \n\nAfter that, we can arrange a consultation at your convenience. \n\nLooking forward to hearing from you!",
+      "judge": [
+        {
+          "point": "responds to the tune-up pricing question without inventing a price",
+          "met": true,
+          "evidence": "The cost can vary depending on a few factors, and we\u2019d like to understand your system better to provide an accurate quote.",
+          "why": "The draft addresses the pricing question, explains there's no fixed price without more details, and does not invent or quote a price."
+        },
+        {
+          "point": "asks one or two details to give an accurate quote",
+          "met": true,
+          "evidence": "Could you share any details about your AC unit, like the brand and model?",
+          "why": "The draft asks for specific details (brand and model) needed to provide an accurate quote."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "create",
+      "crm_stage": "marketingqualifiedlead",
+      "crm_external_id": "567392481001",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:32.554Z",
+        "email": null,
+        "hs_object_id": "567392481001",
+        "lastmodifieddate": "2026-10-10T15:01:32.554Z",
+        "lifecyclestage": "marketingqualifiedlead",
+        "phone": "+923005550188"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": true,
+      "crm_ok": true,
+      "webhook_s": 2.7792511370498687,
+      "approve_s": 1.865010223002173
+    },
+    {
+      "id": 5,
+      "person": "mike-torres",
+      "channel": "web_form",
+      "expected_category": "cold",
+      "expected_new_lead": true,
+      "expected_crm": {
+        "action": "create",
+        "lifecycle_stage": "lead"
+      },
+      "lead_id": "2e0e6bcb-99fc-4042-b8a5-deaa34bc5ca1",
+      "got_category": "cold",
+      "confidence": 0.9,
+      "reasoning": "Mike explicitly stated he is not looking to buy anything right now and is just browsing.",
+      "is_new": true,
+      "match_reason": null,
+      "draft_subject": "Thanks for stopping by!",
+      "draft_body": "Hi Mike,\n\nThanks for checking us out! We're here if you have any questions or need information in the future. Feel free to reach out any time.\n\nBest,\nThe Team",
+      "judge": [
+        {
+          "point": "short and low-pressure",
+          "met": true,
+          "evidence": "Thanks for checking us out! We're here if you have any questions or need information in the future. Feel free to reach out any time.",
+          "why": "The message is brief and does not apply any pressure to buy or act."
+        },
+        {
+          "point": "leaves the door open without a hard sell",
+          "met": true,
+          "evidence": "We're here if you have any questions or need information in the future. Feel free to reach out any time.",
+          "why": "The reply invites the lead to reach out in the future, with no pressure or push to make a purchase, effectively keeping the conversation open."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "create",
+      "crm_stage": "lead",
+      "crm_external_id": "567389302475",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:39.184Z",
+        "email": "mtorres88@yahoo.com",
+        "hs_object_id": "567389302475",
+        "lastmodifieddate": "2026-10-10T15:01:39.184Z",
+        "lifecyclestage": "lead",
+        "phone": null
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": true,
+      "crm_ok": true,
+      "webhook_s": 2.5053601230029017,
+      "approve_s": 2.045843600993976
+    },
+    {
+      "id": 6,
+      "person": "jason-lee",
+      "channel": "web_form",
+      "expected_category": "cold",
+      "expected_new_lead": true,
+      "expected_crm": {
+        "action": "create",
+        "lifecycle_stage": "lead"
+      },
+      "lead_id": "11bc056d-8af7-4d36-97be-ba68252fb269",
+      "got_category": "cold",
+      "confidence": 0.9,
+      "reasoning": "The lead is soliciting services rather than expressing a need for home services.",
+      "is_new": true,
+      "match_reason": null,
+      "draft_subject": "Thank you for reaching out",
+      "draft_body": "Hi Jason, thanks for your message! We're currently not looking for marketing services at this time. However, we appreciate your offer and wish you the best with your business. If our needs change, we\u2019ll be sure to keep you in mind. Take care!",
+      "judge": [
+        {
+          "point": "politely declines or states no interest",
+          "met": true,
+          "evidence": "We're currently not looking for marketing services at this time. However, we appreciate your offer",
+          "why": "The reply both politely declines the offer and expresses appreciation, making the lack of interest clear."
+        },
+        {
+          "point": "does not engage with the sales pitch or commit to anything",
+          "met": true,
+          "evidence": "",
+          "why": "The draft does not accept the audit, ask questions about the offer, or show interest in the sales pitch or any future engagement."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "create",
+      "crm_stage": "lead",
+      "crm_external_id": "567392602859",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:46.344Z",
+        "email": "jason.lee@example.com",
+        "hs_object_id": "567392602859",
+        "lastmodifieddate": "2026-10-10T15:01:46.344Z",
+        "lifecyclestage": "lead",
+        "phone": "+13055550110"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": true,
+      "crm_ok": true,
+      "webhook_s": 2.202383956988342,
+      "approve_s": 2.6851931180572137
+    },
+    {
+      "id": 7,
+      "person": "ahmed-raza",
+      "channel": "whatsapp",
+      "expected_category": "hot",
+      "expected_new_lead": true,
+      "expected_crm": {
+        "action": "create",
+        "lifecycle_stage": "salesqualifiedlead"
+      },
+      "lead_id": "b76f4d8d-cf77-4eb4-86e8-028fc2ce43cd",
+      "got_category": "hot",
+      "confidence": 1.0,
+      "reasoning": "The lead has a clear urgent need for plumbing services due to a burst pipe and is willing to pay for immediate assistance.",
+      "is_new": true,
+      "match_reason": null,
+      "draft_subject": "Urgent Plumbing Assistance",
+      "draft_body": "Hi Ahmed,\n\nThanks for reaching out about the burst pipe situation. I understand how urgent this is and we'd like to help you right away. Please ensure that the water supply to that area is turned off to prevent further damage.\n\nCan we send a plumber to your location within the next hour? Let us know if that works for you, and we'll be on our way.",
+      "judge": [
+        {
+          "point": "treats it as an emergency and replies immediately",
+          "met": true,
+          "evidence": "I understand how urgent this is and we'd like to help you right away.",
+          "why": "The draft directly acknowledges the urgency and expresses readiness to help 'right away,' reflecting an immediate and emergency-oriented response."
+        },
+        {
+          "point": "gives safety advice such as shutting off the main water valve",
+          "met": true,
+          "evidence": "Please ensure that the water supply to that area is turned off to prevent further damage.",
+          "why": "The draft gives clear safety advice by instructing the customer to turn off the water supply, which is appropriate for the situation."
+        },
+        {
+          "point": "confirms someone will call or dispatch right away",
+          "met": false,
+          "evidence": "",
+          "why": "The draft asks if the customer is available within the next hour before dispatching, but does not clearly state that someone is being dispatched or will call immediately regardless. It only expresses willingness depending on the customer's reply, rather than confirming a definite action."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "create",
+      "crm_stage": "salesqualifiedlead",
+      "crm_external_id": "567371938524",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:54.528Z",
+        "email": null,
+        "hs_object_id": "567371938524",
+        "lastmodifieddate": "2026-10-10T15:01:54.528Z",
+        "lifecyclestage": "salesqualifiedlead",
+        "phone": "+447700900123"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": false,
+      "crm_ok": true,
+      "webhook_s": 3.022084746044129,
+      "approve_s": 2.21384661400225
+    },
+    {
+      "id": 8,
+      "person": "sarah-mitchel-gutters",
+      "channel": "web_form",
+      "expected_category": "warm",
+      "expected_new_lead": true,
+      "expected_crm": {
+        "action": "create",
+        "lifecycle_stage": "marketingqualifiedlead"
+      },
+      "lead_id": "c57c732c-7b8b-4d32-a413-03ec20da0b65",
+      "got_category": "warm",
+      "confidence": 0.8,
+      "reasoning": "Sarah is interested in gutter cleaning but is looking at a timeline for next month, indicating no urgency.",
+      "is_new": true,
+      "match_reason": null,
+      "draft_subject": "Gutter Cleaning Quote",
+      "draft_body": "Hi Sarah,\n\nThanks for reaching out! We'd be happy to help you with a quote for gutter cleaning next month. To provide you with the most accurate estimate, could you let us know how many stories your home is and if there are any specific areas of concern?\n\nLooking forward to your response!\n\nBest,\nThe Team",
+      "judge": [
+        {
+          "point": "responds about gutter cleaning, not a furnace",
+          "met": true,
+          "evidence": "We'd be happy to help you with a quote for gutter cleaning next month.",
+          "why": "The draft directly mentions providing a quote for gutter cleaning next month, not about a furnace."
+        },
+        {
+          "point": "asks about house size or access to quote",
+          "met": true,
+          "evidence": "could you let us know how many stories your home is and if there are any specific areas of concern?",
+          "why": "The draft asks specifically for the number of stories (house size) and any areas of concern, meeting the requirement to gather information needed for the quote."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "create",
+      "crm_stage": "marketingqualifiedlead",
+      "crm_external_id": "567392543472",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:02:01.575Z",
+        "email": "smitchel@outlook.com",
+        "hs_object_id": "567392543472",
+        "lastmodifieddate": "2026-10-10T15:02:01.575Z",
+        "lifecyclestage": "marketingqualifiedlead",
+        "phone": "+12125550199"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": true,
+      "crm_ok": true,
+      "webhook_s": 2.7114681570092216,
+      "approve_s": 2.4097064780071378
+    },
+    {
+      "id": 9,
+      "person": "daniel-okafor",
+      "channel": "whatsapp",
+      "expected_category": "hot",
+      "expected_new_lead": false,
+      "expected_crm": {
+        "action": "update",
+        "lifecycle_stage": "salesqualifiedlead"
+      },
+      "lead_id": "3befd2df-93e0-4193-93a1-810ae4e7c2b9",
+      "got_category": "hot",
+      "confidence": 0.95,
+      "reasoning": "Daniel has a clear timeline for decision-making and an urgent need for a contractor, wanting an appointment before his decision date.",
+      "is_new": false,
+      "match_reason": "normalized phone match; name 'Dan Okafor' ~ 'Daniel Okafor'",
+      "draft_subject": "Re: Kitchen Remodel Appointment",
+      "draft_body": "Hi Daniel,\n\nThanks for following up! We understand it\u2019s an important decision, and we\u2019re here to help. We can definitely schedule a visit on Thursday to discuss your kitchen remodel in detail and provide you with an accurate quote.\n\nPlease let us know what time works best for you on Thursday, and we\u2019ll make it happen!\n\nLooking forward to meeting you.\n\nBest,\nThe Team",
+      "judge": [
+        {
+          "point": "references the kitchen remodel and his Friday decision",
+          "met": false,
+          "evidence": "We understand it\u2019s an important decision",
+          "why": "The draft references that it is an 'important decision,' but does not specifically mention the Friday deadline/decision as stated in the lead's message."
+        },
+        {
+          "point": "confirms or proposes a Thursday visit",
+          "met": true,
+          "evidence": "We can definitely schedule a visit on Thursday to discuss your kitchen remodel in detail and provide you with an accurate quote.",
+          "why": "The draft explicitly states that a Thursday visit can be scheduled, fulfilling this point."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "update",
+      "crm_stage": "salesqualifiedlead",
+      "crm_external_id": "567390432997",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:25.289Z",
+        "email": "d.okafor@fastmail.com",
+        "hs_object_id": "567390432997",
+        "lastmodifieddate": "2026-10-10T15:02:08.637Z",
+        "lifecyclestage": "salesqualifiedlead",
+        "phone": "+16505550177"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": false,
+      "crm_ok": true,
+      "webhook_s": 3.369020913960412,
+      "approve_s": 1.5908236890099943
+    },
+    {
+      "id": 10,
+      "person": "priya-sharma",
+      "channel": "web_form",
+      "expected_category": "warm",
+      "expected_new_lead": false,
+      "expected_crm": {
+        "action": "update",
+        "lifecycle_stage": "marketingqualifiedlead"
+      },
+      "lead_id": "e6dba1db-5099-40c2-b9b2-4a4ee862292b",
+      "got_category": "warm",
+      "confidence": 0.8,
+      "reasoning": "Priya has expressed a genuine interest in an AC tune-up but mentioned there is no rush, indicating a longer timeline.",
+      "is_new": false,
+      "match_reason": "normalized phone match; name 'Priya Sharma' ~ 'Priya'",
+      "draft_subject": "Regarding Your AC Tune-Up Request",
+      "draft_body": "Hi Priya,\n\nThanks for following up! We\u2019d be happy to help you with the AC tune-up before summer.\n\nSince you mentioned there\u2019s no rush, we can schedule a time that works best for you. Could you please share any specific concerns you might have with your AC, or is there a timeframe you have in mind for when you\u2019d like us to come by? \n\nLooking forward to assisting you further!",
+      "judge": [
+        {
+          "point": "references her earlier WhatsApp message",
+          "met": false,
+          "evidence": "",
+          "why": "The draft does not mention the WhatsApp message specifically; it only thanks the lead for following up, without referencing WhatsApp or the initial message."
+        },
+        {
+          "point": "proposes scheduling the tune-up before summer",
+          "met": true,
+          "evidence": "We\u2019d be happy to help you with the AC tune-up before summer.",
+          "why": "The draft explicitly states they can help with the tune-up before summer, which implies scheduling it before the season."
+        }
+      ],
+      "judge_error": null,
+      "crm_status": "synced",
+      "crm_action": "update",
+      "crm_stage": "marketingqualifiedlead",
+      "crm_external_id": "567392481001",
+      "crm_error": null,
+      "crm_state": {
+        "createdate": "2026-10-10T15:01:32.554Z",
+        "email": "priya.sharma@example.com",
+        "hs_object_id": "567392481001",
+        "lastmodifieddate": "2026-10-10T15:02:15.061Z",
+        "lifecyclestage": "marketingqualifiedlead",
+        "phone": "+923005550188"
+      },
+      "category_ok": true,
+      "dedup_ok": true,
+      "draft_ok": false,
+      "crm_ok": true,
+      "webhook_s": 2.6909301310079172,
+      "approve_s": 1.6259318359661847
+    }
+  ],
+  "hubspot_contacts_created": [
+    "567371938524",
+    "567389302475",
+    "567390432997",
+    "567392481001",
+    "567392543472",
+    "567392602859",
+    "567392732895"
+  ],
+  "hubspot_contacts_deleted": true
+}

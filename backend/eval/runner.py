@@ -172,8 +172,9 @@ def run_eval(
     events: list[dict] = TEST_SET,
     crm_state: Callable[[str], dict] | None = None,
     clock: Callable[[], float] = time.perf_counter,
+    draft_llm=None,
 ) -> EvalReport:
-    client = TestClient(create_app(repo=repo, llm=llm, crm=crm))
+    client = TestClient(create_app(repo=repo, llm=llm, crm=crm, draft_llm=draft_llm))
     first_lead: dict[str, str] = {}  # person -> lead id of their first event
     results: list[EventResult] = []
 
@@ -274,7 +275,8 @@ def to_markdown(report: EvalReport, models: dict[str, str]) -> str:
         )
     p = s["passed"]
     summary = [
-        f"Models: scorer/drafter `{models['scorer']}`, draft judge `{models['judge']}`.",
+        f"Models: scorer `{models['scorer']}`, drafter `{models['drafter']}`, "
+        f"draft judge `{models['judge']}`.",
         "",
         f"- Category correct: {p['category']}/{n}",
         f"- Dedup correct: {p['dedup']}/{n} ({s['distinct_leads']} distinct leads)",
@@ -290,3 +292,65 @@ def to_markdown(report: EvalReport, models: dict[str, str]) -> str:
         "",
     ]
     return "\n".join(summary + lines) + "\n"
+
+
+CHECKS = ("category", "dedup", "draft", "crm")
+
+
+def aggregate(reports: list[EvalReport]) -> dict:
+    """Spread across repeated runs of one configuration."""
+
+    def spread(counts: list[int]) -> dict:
+        return {
+            "per_run": counts,
+            "mean": statistics.fmean(counts),
+            "min": min(counts),
+            "max": max(counts),
+        }
+
+    summaries = [r.summary() for r in reports]
+    out: dict = {"runs": len(reports), "events": summaries[0]["events"]}
+    for check in CHECKS:
+        out[check] = spread([s["passed"][check] for s in summaries])
+    out["all_passed"] = spread([s["all_passed"] for s in summaries])
+    out["event_pass_counts"] = {
+        e.id: sum(r.events[i].all_ok for r in reports) for i, e in enumerate(reports[0].events)
+    }
+    out["latency_mean_s"] = {
+        part: [s["latency_s"][part]["mean"] for s in summaries]
+        for part in ("webhook", "approve", "total")
+    }
+    return out
+
+
+def aggregate_markdown(agg: dict, models: dict[str, str]) -> str:
+    n, runs = agg["events"], agg["runs"]
+    lines = [
+        f"Models: scorer `{models['scorer']}`, drafter `{models['drafter']}`, "
+        f"draft judge `{models['judge']}`. {runs} runs of {n} events each.",
+        "",
+        "| Check | per run | mean | range |",
+        "|---|---|---|---|",
+    ]
+    labels = {
+        "category": "Category",
+        "dedup": "Dedup",
+        "draft": "Draft relevant",
+        "crm": "CRM write",
+        "all_passed": "All four",
+    }
+    for key, label in labels.items():
+        a = agg[key]
+        per_run = ", ".join(f"{c}/{n}" for c in a["per_run"])
+        lines.append(f"| {label} | {per_run} | {a['mean']:.1f}/{n} | {a['min']}–{a['max']}/{n} |")
+    counts = ", ".join(f"#{i}: {c}/{runs}" for i, c in agg["event_pass_counts"].items())
+    total = agg["latency_mean_s"]["total"]
+    lines += [
+        "",
+        f"Events passing all four, by event: {counts}.",
+        "Mean seconds per event (intake through approval), per run: "
+        + ", ".join(f"{t:.1f}" for t in total)
+        + ".",
+        "",
+    ]
+    return "\n".join(lines)
