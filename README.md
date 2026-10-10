@@ -14,6 +14,24 @@ cp .env.example .env                         # fill in keys as needed
 .venv/bin/pytest                             # default suite, no network
 ```
 
+## CI parity
+
+GitHub Actions (`.github/workflows/ci.yml`) runs exactly these commands, so a green local run means a
+green CI run:
+
+```bash
+docker build -t funneltrace-backend backend && docker run --rm funneltrace-backend     # lint + default suite
+docker build -t funneltrace-frontend frontend && docker run --rm funneltrace-frontend  # typecheck, lint, tests, build
+
+# DB-backed tests too (CI does this against a Postgres service; locally use the compose db):
+docker run --rm --network host \
+  -e FUNNELTRACE_TEST_DATABASE_URL=postgresql://funneltrace:funneltrace@localhost:5433/funneltrace_test \
+  funneltrace-backend
+```
+
+The backend image can also serve the API (`docker run ... funneltrace-backend serve`, with the env from
+`backend/.env.example`).
+
 ## Frontend quick start
 
 ```bash
@@ -62,7 +80,9 @@ Then a controlled experiment on the weak spot, the drafts: only the drafting mod
 
 Category, dedup and the CRM write were 10/10 in all six runs. The stronger drafter looks better on
 average at about the same latency, but the ranges overlap (4–6 vs 5–9) and three runs of ten events
-is a small sample: treat it as a likely improvement, not a proven one.
+is a small sample: treat it as a likely improvement, not a proven one. Because the latency was the
+same, `gpt-5.4-mini` is now the app's default drafting model (`OPENAI_DRAFT_MODEL` overrides it);
+the runs above that predate this used `gpt-4o-mini` as drafter. Scoring stays on `OPENAI_MODEL`.
 
 How to read this:
 

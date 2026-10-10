@@ -21,7 +21,7 @@ import psycopg
 
 from eval.runner import aggregate, aggregate_markdown, run_eval, to_markdown
 from eval.test_set import TEST_SET
-from funneltrace.config import load_env
+from funneltrace.config import DEFAULT_DRAFT_MODEL, load_env
 from funneltrace.crm import HubSpotCrm
 from funneltrace.db import apply_migrations
 from funneltrace.intake import normalize_phone
@@ -101,7 +101,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--keep-contacts", action="store_true")
     parser.add_argument("--runs", type=int, default=1, help="repeat the whole eval N times")
-    parser.add_argument("--draft-model", help="model that writes the drafts (default: scorer)")
+    parser.add_argument(
+        "--draft-model", help="model that writes the drafts (default: the app default)"
+    )
     args = parser.parse_args()
 
     load_env()
@@ -110,7 +112,7 @@ def main() -> None:
     scorer = os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
     models = {
         "scorer": scorer,
-        "drafter": args.draft_model or os.environ.get("EVAL_DRAFT_MODEL") or scorer,
+        "drafter": args.draft_model or os.environ.get("EVAL_DRAFT_MODEL") or DEFAULT_DRAFT_MODEL,
         # A different model from the drafter, so it does not grade its own writing.
         "judge": os.environ.get("EVAL_JUDGE_MODEL") or "gpt-4.1",
     }

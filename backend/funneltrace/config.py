@@ -11,13 +11,17 @@ def load_env(path: str | None = None) -> None:
     load_dotenv(path)
 
 
+# Chosen from the drafter experiment in the README (higher draft relevance than gpt-4o-mini).
+DEFAULT_DRAFT_MODEL = "gpt-5.4-mini"
+
+
 @dataclass(frozen=True)
 class Settings:
     database_url: str
     openai_api_key: str = ""
     hubspot_access_token: str = ""
     openai_model: str = "gpt-4o-mini"
-    openai_draft_model: str = "gpt-4o-mini"
+    openai_draft_model: str = DEFAULT_DRAFT_MODEL
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -30,5 +34,5 @@ class Settings:
             openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
             hubspot_access_token=os.environ.get("HUBSPOT_ACCESS_TOKEN", ""),
             openai_model=model,
-            openai_draft_model=os.environ.get("OPENAI_DRAFT_MODEL") or model,
+            openai_draft_model=os.environ.get("OPENAI_DRAFT_MODEL") or DEFAULT_DRAFT_MODEL,
         )

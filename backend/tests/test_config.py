@@ -50,11 +50,11 @@ def test_load_env_reads_a_dotenv_file_but_real_env_vars_win(tmp_path, monkeypatc
     monkeypatch.delenv("OPENAI_API_KEY")
 
 
-def test_draft_model_follows_the_main_model_unless_set_separately(monkeypatch):
+def test_replies_are_written_by_gpt_5_4_mini_unless_set_separately(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://x")
     monkeypatch.setenv("OPENAI_MODEL", "gpt-main")
     monkeypatch.delenv("OPENAI_DRAFT_MODEL", raising=False)
-    assert Settings.from_env().openai_draft_model == "gpt-main"
-    monkeypatch.setenv("OPENAI_DRAFT_MODEL", "gpt-writer")
     s = Settings.from_env()
-    assert (s.openai_model, s.openai_draft_model) == ("gpt-main", "gpt-writer")
+    assert (s.openai_model, s.openai_draft_model) == ("gpt-main", "gpt-5.4-mini")
+    monkeypatch.setenv("OPENAI_DRAFT_MODEL", "gpt-writer")
+    assert Settings.from_env().openai_draft_model == "gpt-writer"

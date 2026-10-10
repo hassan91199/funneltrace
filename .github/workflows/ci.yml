@@ -1,0 +1,48 @@
+name: ci
+
+# Each job runs the same docker build && docker run you run locally (see README, "CI parity").
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t funneltrace-backend backend
+      - run: docker run --rm funneltrace-backend
+
+  # The same image, with a scratch Postgres so the DB-backed tests run instead of skipping.
+  backend-db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: funneltrace
+          POSTGRES_PASSWORD: funneltrace
+          POSTGRES_DB: funneltrace_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U funneltrace"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t funneltrace-backend backend
+      - run: >-
+          docker run --rm --network host
+          -e FUNNELTRACE_TEST_DATABASE_URL=postgresql://funneltrace:funneltrace@localhost:5432/funneltrace_test
+          funneltrace-backend
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t funneltrace-frontend frontend
+      - run: docker run --rm funneltrace-frontend
