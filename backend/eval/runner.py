@@ -20,9 +20,19 @@ from funneltrace.api import create_app
 
 JUDGE_SYSTEM = """\
 You grade a drafted reply to an inbound lead for a small home-services company. You are given \
-the conversation and a checklist. For every checklist point, say whether the draft satisfies \
-it. Be strict: a point is met only if the draft clearly does it. Judge the draft, not the \
-lead. Return every point exactly as written.
+the conversation and a checklist. For every checklist point, decide whether the draft \
+satisfies it.
+
+Be strict. A point is met only if the draft clearly does it, and you must back every met \
+point with "evidence": one single contiguous quote, copied word for word from the draft (never \
+two passages joined together). If you cannot quote words that show it, the point is not met \
+and the evidence is an empty string. Points that say the draft "does not" do something are \
+met by absence: they need no quote (use an empty string); they are not met only if the draft \
+does it, and then quote the offending words. Generic \
+politeness ("thanks for reaching out", "happy to help") does not show that a draft refers to \
+something specific; a point about an earlier message or a stated detail needs a specific \
+reference to that content. Judge the draft, not the lead. Return every point exactly as \
+written.
 """
 
 JUDGE_SCHEMA = {
@@ -35,9 +45,10 @@ JUDGE_SCHEMA = {
                 "properties": {
                     "point": {"type": "string"},
                     "met": {"type": "boolean"},
+                    "evidence": {"type": "string"},
                     "why": {"type": "string"},
                 },
-                "required": ["point", "met", "why"],
+                "required": ["point", "met", "evidence", "why"],
                 "additionalProperties": False,
             },
         }
@@ -45,6 +56,9 @@ JUDGE_SCHEMA = {
     "required": ["points"],
     "additionalProperties": False,
 }
+
+# "does not ..." points are met by absence, so there are no words to quote for them.
+NEGATIVE_POINTS = ("does not", "do not", "never")
 
 WEBHOOK = {"web_form": "/webhooks/web-form", "whatsapp": "/webhooks/whatsapp"}
 
@@ -117,6 +131,12 @@ class EvalReport:
         }
 
 
+def _squash(text: str) -> str:
+    # Curly quotes in a quote must not break an exact-substring check.
+    text = text.replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
+    return " ".join(text.lower().split())
+
+
 def judge_draft(judge, event: dict, messages: list[tuple[str, str]], subject: str, body: str):
     """Ask the judge whether each checklist point is met. Returns (points, error)."""
     checklist = event["draft_must_address"]
@@ -128,14 +148,17 @@ def judge_draft(judge, event: dict, messages: list[tuple[str, str]], subject: st
     try:
         raw = judge.complete_json(JUDGE_SYSTEM, user, JUDGE_SCHEMA)
         verdicts = {p["point"]: p for p in raw["points"]}
-        points = [
-            {
-                "point": point,
-                "met": bool(verdicts[point]["met"]),
-                "why": verdicts[point]["why"],
-            }
-            for point in checklist
-        ]
+        draft_text = _squash(f"{subject} {body}")
+        points = []
+        for point in checklist:
+            verdict = verdicts[point]
+            met, why = bool(verdict["met"]), verdict["why"]
+            quote = verdict.get("evidence", "")
+            # A claim without words from the draft behind it does not count.
+            needs_quote = not point.lower().startswith(NEGATIVE_POINTS)
+            if met and needs_quote and (not quote.strip() or _squash(quote) not in draft_text):
+                met, why = False, f"quoted evidence not found in the draft ({quote!r})"
+            points.append({"point": point, "met": met, "evidence": quote, "why": why})
     except Exception as exc:  # a judge that fails to answer must not read as a pass
         return [{"point": p, "met": False, "why": "not judged"} for p in checklist], str(exc)
     return points, None

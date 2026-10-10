@@ -65,3 +65,37 @@ def test_refusal_and_bad_json_become_drafting_errors():
         draft_followup(FakeLLM(draft=LLMRefusal("no")), "X", HOT, [("web_form", "hi")])
     with pytest.raises(DraftingError):
         draft_followup(FakeLLM(draft=ValueError("bad json")), "X", HOT, [("web_form", "hi")])
+
+
+def test_a_follow_up_is_marked_so_the_reply_answers_the_latest_message():
+    llm = FakeLLM(draft=GOOD)
+    draft_followup(
+        llm,
+        "Priya",
+        ScoreResult("warm", 0.7, "Wants a tune-up."),
+        [("whatsapp", "how much for a tune up?"), ("web_form", "before summer, no rush")],
+    )
+    _, user, _ = llm.json_calls[0]
+    assert "following up" in user.lower()
+    assert "whatsapp" in user and "web_form" in user
+    earlier, latest = user.split("Latest message")
+    assert "how much for a tune up?" in earlier and "before summer" not in earlier
+    assert "before summer, no rush" in latest and "how much" not in latest
+
+
+def test_a_first_message_is_not_framed_as_a_follow_up():
+    llm = FakeLLM(draft=GOOD)
+    draft_followup(llm, "Sarah", HOT, [("web_form", "Furnace died.")])
+    _, user, _ = llm.json_calls[0]
+    assert "following up" not in user.lower() and "Earlier" not in user
+    assert "Furnace died." in user
+
+
+def test_the_rules_say_to_use_the_latest_messages_specifics_without_naming_any_lead():
+    from funneltrace.drafting import SYSTEM_PROMPT
+
+    lowered = SYSTEM_PROMPT.lower()
+    assert "latest message" in lowered and "timeline" in lowered
+    assert "already" in lowered  # do not re-ask what was already answered or asked
+    for name in ("priya", "sarah", "daniel", "tune-up", "summer"):
+        assert name not in lowered

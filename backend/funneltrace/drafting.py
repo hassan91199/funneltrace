@@ -15,13 +15,17 @@ DRAFT_SCHEMA = {
 }
 
 SYSTEM_PROMPT = """\
-You write the first reply to an inbound lead for a small home-services company (HVAC, \
+You write the next reply to an inbound lead for a small home-services company (HVAC, \
 plumbing, remodels). A human will read and approve it before anything is sent.
 
 Rules:
 - Write as the company team, in a warm, plain, brief voice. Address the person by first \
-name. Respond to what they actually wrote, and to the whole conversation if they wrote \
-more than once (acknowledge earlier messages instead of repeating questions).
+name. Reply to their latest message.
+- If they have written before, they are following up: say so naturally ("thanks for \
+following up"), refer to what they said earlier, and build on it. Do not ask for anything \
+they have already told you, and do not answer again what was already answered or asked.
+- Use the specifics in the latest message: any timeline, deadline, budget or new detail \
+they give, and the channel change if they moved from one channel to another.
 - Never invent a price, discount, availability slot or guarantee. Do not quote a price; \
 offer to give an accurate quote after a short call or visit.
 - Match the tone to the category:
@@ -60,12 +64,25 @@ def parse_draft(raw: object) -> DraftContent:
 def draft_followup(
     llm: LeadLLM, name: str, score: ScoreResult, messages: list[tuple[str, str]]
 ) -> DraftContent:
-    conversation = "\n".join(f"[{channel}] {body}" for channel, body in messages)
+    def line(channel: str, body: str) -> str:
+        return f"[{channel}] {body}"
+
+    *earlier, latest = messages
+    if earlier:
+        history = "\n".join(line(c, b) for c, b in earlier)
+        thread = (
+            f"This person is following up: they have written {len(messages)} times, first on "
+            f"{earlier[0][0]}, most recently on {latest[0]}.\n"
+            f"Earlier messages, oldest first:\n{history}\n"
+            f"Latest message (reply to this one):\n{line(*latest)}"
+        )
+    else:
+        thread = f"Message:\n{line(*latest)}"
     user = (
         f"Lead name: {name}\n"
         f"Category: {score.category} (confidence {score.confidence:.2f})\n"
         f"Why: {score.reasoning}\n"
-        f"Messages, oldest first:\n{conversation}"
+        f"{thread}"
     )
     try:
         raw = llm.complete_json(SYSTEM_PROMPT, user, DRAFT_SCHEMA)

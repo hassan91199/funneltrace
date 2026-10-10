@@ -53,7 +53,7 @@ export const PRESETS: Preset[] = [
     channel: "web_form",
     payload: {
       name: "Jason Lee",
-      email: "jason@rankboost-seo.example",
+      email: "jason.lee@example.com",
       phone: "+1 305 555 0110",
       message: "We can get your company onto page 1 of Google in 30 days. Reply for a free audit.",
     },

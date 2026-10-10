@@ -14,18 +14,33 @@ DRAFTS = [{"subject": f"Re {e['id']}", "body": f"Body {e['id']}"} for e in TEST_
 
 
 class StubJudge:
-    """Reads the checklist lines out of the prompt; marks `unmet` ones as not satisfied."""
+    """Reads the checklist lines out of the prompt; marks `unmet` ones as not satisfied.
+
+    A point it meets is backed by a real quote taken from the draft in the prompt."""
 
     model = "stub-judge"
 
-    def __init__(self, unmet=()):
+    def __init__(self, unmet=(), fake_quote=None):
         self.unmet = set(unmet)
+        self.fake_quote = fake_quote
         self.calls = 0
 
     def complete_json(self, system, user, schema):
         self.calls += 1
         points = [line[2:] for line in user.splitlines() if line.startswith("- ")]
-        return {"points": [{"point": p, "met": p not in self.unmet, "why": "stub"} for p in points]}
+        draft = user.split("Drafted reply:\n")[1].split("\n\nChecklist:")[0]
+        quote = self.fake_quote or draft.splitlines()[-1]
+        return {
+            "points": [
+                {
+                    "point": p,
+                    "met": p not in self.unmet,
+                    "evidence": "" if p in self.unmet else quote,
+                    "why": "stub",
+                }
+                for p in points
+            ]
+        }
 
 
 def run(scores=None, drafts=None, judge=None, crm=None, **kw):
@@ -149,3 +164,50 @@ def test_preflight_names_eval_leads_that_already_exist_in_the_crm():
             return "99" if contact["email"] == "mtorres88@yahoo.com" else None
 
     assert existing_contacts(Crm()) == ["#5 mike-torres (contact 99)"]
+
+
+def test_a_met_point_must_be_backed_by_words_that_are_really_in_the_draft():
+    report = run(judge=StubJudge(fake_quote="We will fly a helicopter over tomorrow"))
+    assert not any(e.draft_ok for e in report.events)
+    first = report.events[0].judge[0]
+    assert first["met"] is False and "not found in the draft" in first["why"]
+
+
+def test_quotes_match_the_draft_despite_line_breaks_and_case():
+    report = run(judge=StubJudge(fake_quote="body 1"))  # draft 1's body is "Body 1"
+    assert report.events[0].draft_ok
+
+
+def test_the_grader_is_told_to_demand_specific_evidence():
+    from eval.runner import JUDGE_SCHEMA, JUDGE_SYSTEM
+
+    assert "evidence" in JUDGE_SCHEMA["properties"]["points"]["items"]["required"]
+    assert "quote" in JUDGE_SYSTEM.lower() and "generic" in JUDGE_SYSTEM.lower()
+
+
+def test_a_must_not_point_is_met_by_absence_so_it_needs_no_quote():
+    class AbsenceJudge(StubJudge):
+        def complete_json(self, system, user, schema):
+            out = super().complete_json(system, user, schema)
+            for p in out["points"]:
+                if p["point"].startswith("does not"):
+                    p["met"], p["evidence"] = True, ""
+            return out
+
+    report = run(judge=AbsenceJudge())
+    assert report.events[0].draft_ok  # includes "does not quote a price"
+
+
+def test_a_must_not_point_still_fails_when_the_judge_says_it_was_violated():
+    point = TEST_SET[0]["draft_must_address"][2]
+    assert point.startswith("does not")
+    report = run(judge=StubJudge(unmet=[point]))
+    assert not report.events[0].draft_ok
+
+
+def test_the_grader_is_told_quotes_are_contiguous_and_absence_needs_none():
+    from eval.runner import JUDGE_SYSTEM
+
+    lowered = JUDGE_SYSTEM.lower()
+    assert "single" in lowered and "contiguous" in lowered
+    assert "must not" in lowered or "does not" in lowered

@@ -60,7 +60,8 @@ def main() -> None:
     database_url = require("FUNNELTRACE_TEST_DATABASE_URL")
     api_key = require("OPENAI_API_KEY")
     model = os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
-    judge_model = os.environ.get("EVAL_JUDGE_MODEL") or model
+    # A different model from the drafter, so it does not grade its own writing.
+    judge_model = os.environ.get("EVAL_JUDGE_MODEL") or "gpt-4.1"
 
     crm = HubSpotCrm(require("HUBSPOT_ACCESS_TOKEN"))
     leftovers = existing_contacts(crm)
