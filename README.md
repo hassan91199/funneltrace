@@ -2,7 +2,39 @@
 
 AI lead-triage workflow: multi-channel intake, LLM scoring with reasoning, dedup, human-approved follow-up drafts, HubSpot sync, and a live decision trace.
 
-Status: backend and UI built; architecture diagram and demo assets still to come.
+## Demo
+
+[Watch the 64 s demo](docs/demo/demo.mp4): a web-form lead is scored and drafted, the same person writes on
+WhatsApp and is merged, a human approves and the contact is created in HubSpot (sandbox), and a vendor pitch
+is scored cold and rejected. It is a recording of the running app with fake leads; the voice and captions
+are added afterwards (`demo/` has the scripts that make it).
+
+![Scored lead with reasoning and a drafted reply](docs/demo/screenshot-scored-draft-with-reasoning.png)
+![Same person on a second channel, merged into one lead](docs/demo/screenshot-cross-channel-merge.png)
+
+## Architecture
+
+```mermaid
+flowchart LR
+    form[Web form] --> api
+    wa[WhatsApp-style webhook] --> api
+    subgraph api[FastAPI]
+        intake[Normalize to one lead shape] --> dedup[Dedup by email or phone<br/>plus compatible name]
+        dedup --> score[LLM scoring:<br/>category, confidence, reasoning]
+        score --> draft[LLM follow-up draft]
+    end
+    draft --> inbox[Approval inbox]
+    inbox -- approve --> send[Log would-send payload]
+    send --> crm[CrmSync interface]
+    crm --> hubspot[HubSpot adapter]
+    api --> pg[(PostgreSQL:<br/>leads, scores, drafts, trace events)]
+    pg -- SSE --> ui[Next.js UI:<br/>inbox, live trace]
+    inbox --- ui
+```
+
+Nothing is sent to a lead: approval only logs the payload that would be sent. Every step writes a trace event
+to Postgres, and the UI follows them live over server-sent events and can replay a lead's full journey. The LLM
+and the CRM sit behind interfaces, so the default test suite runs against fakes with no network.
 
 ## Backend quick start
 

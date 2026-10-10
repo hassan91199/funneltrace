@@ -1,0 +1,27 @@
+{
+  "voice": "en-US-AndrewNeural",
+  "scenes": [
+    {"id": "intro", "phrases": [
+      "FunnelTrace triages inbound leads for a home services company.",
+      "Every decision is traced, and nothing is sent until a person approves it."]},
+    {"id": "form", "phrases": [
+      "A web form lead arrives: the furnace died, and budget is approved.",
+      "The model scores it hot, shows its reasoning and confidence,",
+      "and drafts a reply that waits for review."]},
+    {"id": "merge", "phrases": [
+      "Now the same person writes on WhatsApp.",
+      "FunnelTrace matches the phone number, merges it into one lead,",
+      "scores it again, and replaces the old draft."]},
+    {"id": "approve", "phrases": [
+      "A person approves the draft. Only then is the send logged,",
+      "and the contact is created in HubSpot,",
+      "with a lifecycle stage taken from the score."]},
+    {"id": "cold", "phrases": [
+      "A vendor pitch comes in, and is scored cold.",
+      "Rejecting the draft sends nothing,",
+      "and writes nothing to the CRM."]},
+    {"id": "outro", "phrases": [
+      "Every step is stored and can be replayed from the trace,",
+      "so you can always see why a lead was handled the way it was."]}
+  ]
+}

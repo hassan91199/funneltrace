@@ -7,3 +7,4 @@ node_modules/
 .terraform/
 *.tfstate*
 .playwright-mcp/
+demo/build/
